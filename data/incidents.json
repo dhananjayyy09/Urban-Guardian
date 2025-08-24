@@ -1,0 +1,98 @@
+[
+  {
+    "id": 1755788117772,
+    "type": "accident",
+    "description": "near dehradun",
+    "lat": -11,
+    "lng": -4,
+    "timestamp": "2025-08-21T14:55:17.772Z"
+  },
+  {
+    "id": 1755788130509,
+    "type": "fdd",
+    "description": "df",
+    "lat": -3,
+    "lng": 33,
+    "timestamp": "2025-08-21T14:55:30.509Z"
+  },
+  {
+    "id": 1755788367617,
+    "type": "accident",
+    "description": "near dehradun",
+    "lat": -12,
+    "lng": 5,
+    "timestamp": "2025-08-21T14:59:27.617Z"
+  },
+  {
+    "id": 1755788939031,
+    "type": "Accident",
+    "description": "",
+    "lat": 30.328672,
+    "lng": 78.065988,
+    "timestamp": "2025-08-21T15:08:59.032Z"
+  },
+  {
+    "id": 1755789009060,
+    "type": "Hazard",
+    "description": "",
+    "lat": 30.330077,
+    "lng": 78.053214,
+    "timestamp": "2025-08-21T15:10:09.061Z"
+  },
+  {
+    "id": 1755810812558,
+    "type": "Medical",
+    "description": "",
+    "lat": 30.329141,
+    "lng": 78.064681,
+    "timestamp": "2025-08-21T21:13:32.558Z"
+  },
+  {
+    "id": 1756043879550,
+    "type": "Crime",
+    "description": "robbery took place here in panditwari area",
+    "lat": 30.331196,
+    "lng": 77.989862,
+    "timestamp": "2025-08-24T13:57:59.550Z"
+  },
+  {
+    "id": 1756044724047,
+    "type": "Fire",
+    "description": "",
+    "lat": 28.650268,
+    "lng": 77.267514,
+    "timestamp": "2025-08-24T14:12:04.047Z"
+  },
+  {
+    "id": 1756044827206,
+    "type": "Fire",
+    "description": "",
+    "lat": 28.633229,
+    "lng": 77.214928,
+    "timestamp": "2025-08-24T14:13:47.206Z"
+  },
+  {
+    "id": 1756045539841,
+    "type": "Hazard",
+    "description": "",
+    "lat": 28.785594,
+    "lng": 76.934578,
+    "timestamp": "2025-08-24T14:25:39.841Z"
+  },
+  {
+    "id": 1756046075897,
+    "type": "Crime",
+    "description": "",
+    "lat": 30.337236,
+    "lng": 77.992963,
+    "timestamp": "2025-08-24T14:34:35.897Z"
+  },
+  {
+    "id": 1756046667157,
+    "type": "Medical",
+    "description": "",
+    "lat": 28.645282,
+    "lng": 77.140465,
+    "timestamp": "2025-08-24T14:44:27.157Z"
+  }
+]

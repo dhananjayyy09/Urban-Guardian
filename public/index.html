@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Urban Guardian - Safety Map</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27><text y=%27.9em%27 font-size=%2790%27>🛡️</text></svg>">
+  <meta name="description" content="Urban Guardian – Real-time safety map to report and view incidents near you.">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <span class="logo">🛡️</span>
+        <h1>Urban Guardian</h1>
+      </div>
+      <nav class="main-nav">
+        <button class="nav-tab-btn active" data-nav-tab="home">Home</button>
+        <button class="nav-tab-btn" data-nav-tab="incidents">Recent Incidents</button>
+        <button class="nav-tab-btn" data-nav-tab="analytics">Analytics</button>
+      </nav>
+      <nav class="actions">
+        <button id="locateMe" class="btn btn-secondary">Use my location</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Home View: Map + Report Form -->
+    <div id="homePanel" class="view-panel active">
+      <section class="layout">
+        <div class="map-panel">
+          <div id="map" aria-label="Safety incidents map"></div>
+          <p class="hint">Tip: Click on the map to fill latitude and longitude automatically.</p>
+        </div>
+        
+        <aside class="side-panel">
+          <div class="card">
+            <h2>Report an Incident</h2>
+            <form id="incidentForm" novalidate>
+              <div class="field">
+                <label for="type">Type</label>
+                <select id="type" required>
+                  <option value="">Select type</option>
+                  <option>Accident</option>
+                  <option>Fire</option>
+                  <option>Crime</option>
+                  <option>Medical</option>
+                  <option>Hazard</option>
+                  <option>EarthQuake</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="description">Description</label>
+                <textarea id="description" rows="3" placeholder="Add details (optional)"></textarea>
+              </div>
+              <div class="field grid-2">
+                <div>
+                  <label for="lat">Latitude</label>
+                  <input type="number" id="lat" step="any" required placeholder="e.g. 28.6139">
+                </div>
+                <div>
+                  <label for="lng">Longitude</label>
+                  <input type="number" id="lng" step="any" required placeholder="e.g. 77.2090">
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary full">Report Incident</button>
+            </form>
+          </div>
+        </aside>
+      </section>
+    </div>
+    
+    <!-- Recent Incidents View: Map + Incidents List -->
+    <div id="incidentsPanel" class="view-panel">
+      <section class="layout">
+        <div class="map-panel">
+          <div id="map2" aria-label="Safety incidents map"></div>
+          <p class="hint">Tip: Click on the map to fill latitude and longitude automatically.</p>
+        </div>
+        
+        <aside class="side-panel">
+          <div class="card">
+            <h2>Recent Incidents</h2>
+            <ul id="incidentList" class="incident-list" aria-live="polite"></ul>
+          </div>
+        </aside>
+      </section>
+    </div>
+    
+    <!-- Analytics View: Analytics Dashboard Only -->
+    <div id="analyticsPanel" class="view-panel">
+      <div class="analytics-container">
+        <div class="card">
+          <h2>Analytics Dashboard</h2>
+          <div class="analytics-tabs">
+            <button class="tab-btn active" data-tab="types">Incident Types</button>
+            <button class="tab-btn" data-tab="areas">Area Trends</button>
+          </div>
+          
+          <div id="typesTab" class="tab-content active">
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-number" id="totalIncidents">-</div>
+                <div class="stat-label">Total Incidents</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-number" id="mostReportedType">-</div>
+                <div class="stat-label">Most Reported</div>
+              </div>
+            </div>
+            <div class="type-chart" id="typeChart"></div>
+          </div>
+          
+          <div id="areasTab" class="tab-content">
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-number" id="recent24h">-</div>
+                <div class="stat-label">Last 24h</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-number" id="recent7d">-</div>
+                <div class="stat-label">Last 7 days</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-number" id="hotspots">-</div>
+                <div class="stat-label">Hotspots</div>
+              </div>
+            </div>
+            <div class="hotspot-list" id="hotspotList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>© <span id="year"></span> Urban Guardian. Stay aware. Stay safe.</p>
+    </div>
+  </footer>
+
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
