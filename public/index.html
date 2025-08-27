@@ -13,6 +13,10 @@
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27><text y=%27.9em%27 font-size=%2790%27>🛡️</text></svg>">
   <meta name="description" content="Urban Guardian – Real-time safety map to report and view incidents near you.">
+  <!-- Set your OpenWeatherMap API key here -->
+  <meta name="owm-api-key" content="">
+  <!-- Or use WeatherAPI.com key instead (preferred if set) -->
+  <meta name="weatherapi-key" content="c987651cd2934c6fa41174926250902">
 </head>
 <body>
   <header class="site-header">
@@ -87,6 +91,15 @@
                 <div>
                   <label for="lng">Longitude</label>
                   <input type="number" id="lng" step="any" required placeholder="e.g. 77.2090">
+                </div>
+              </div>
+              <div id="weatherCard" class="weather card" aria-live="polite" style="display:none;">
+                <div class="weather-row">
+                  <div class="weather-status" id="weatherStatus">—</div>
+                  <div class="weather-meta">
+                    <div id="weatherSummary" class="weather-summary">Weather status</div>
+                    <div id="weatherDetail" class="weather-detail">-</div>
+                  </div>
                 </div>
               </div>
               <button type="submit" class="btn btn-primary full">Report Incident</button>

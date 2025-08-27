@@ -32,6 +32,7 @@ function initializeMaps() {
     map.on("click", (e) => {
       latEl.value = e.latlng.lat.toFixed(6);
       lngEl.value = e.latlng.lng.toFixed(6);
+      checkWeather(e.latlng.lat, e.latlng.lng);
     });
   }
   
@@ -114,6 +115,12 @@ const photoPreview = document.getElementById("photoPreview");
 const clearPhotoBtn = document.getElementById("clearPhoto");
 const uploadArea = document.getElementById('uploadArea');
 const uploadActions = document.getElementById('uploadActions');
+const weatherCard = document.getElementById('weatherCard');
+const weatherStatus = document.getElementById('weatherStatus');
+const weatherSummary = document.getElementById('weatherSummary');
+const weatherDetail = document.getElementById('weatherDetail');
+const OWM_API_KEY = document.querySelector('meta[name="owm-api-key"]')?.content || '';
+const WEATHERAPI_KEY = document.querySelector('meta[name="weatherapi-key"]')?.content || '';
 
 // Load existing incidents
 fetch("/api/incidents").then(r => r.json()).then((incidents) => {
@@ -168,6 +175,7 @@ locateMeBtn?.addEventListener("click", () => {
     map.setView([latitude, longitude], 15);
     latEl.value = latitude.toFixed(6);
     lngEl.value = longitude.toFixed(6);
+    checkWeather(latitude, longitude);
     locateMeBtn.disabled = false;
   }, (err) => {
     alert("Could not get your location");
@@ -199,6 +207,9 @@ form.addEventListener("submit", async (e) => {
   if (!type || !Number.isFinite(lat) || !Number.isFinite(lng)) {
     return alert("Please provide a type and valid coordinates.");
   }
+
+  // Optional: check weather at submit time as well
+  checkWeather(lat, lng);
 
   try {
     const res = await fetch("/api/incidents", {
@@ -287,6 +298,8 @@ function addIncidentToList(incident, prepend = false) {
     } else if (activeTab === 'incidents' && map2) {
       map2.setView([incident.lat, incident.lng], 16);
     }
+    // Show weather for that incident location
+    checkWeather(incident.lat, incident.lng);
   });
 
   item.appendChild(type);
@@ -597,4 +610,111 @@ function createClusterIcon(cluster) {
   else if (count >= 10) c = ' marker-cluster-medium';
   const html = `<div><span>${count}</span></div>`;
   return new L.DivIcon({ html, className: 'marker-cluster' + c, iconSize: new L.Point(40, 40) });
+}
+
+// Weather: fetch and evaluate safety
+async function checkWeather(lat, lng) {
+  if (!OWM_API_KEY && !WEATHERAPI_KEY) return; // no key set, skip UI
+  try {
+    let summary = 'Weather data available';
+    let temp = 0;
+    let wind = 0;
+    let conditions = { id: 0, rain1h: 0, snow1h: 0, visibility: 10000 };
+
+    if (WEATHERAPI_KEY) {
+      const url = `https://api.weatherapi.com/v1/current.json?key=${WEATHERAPI_KEY}&q=${lat},${lng}&aqi=no`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('WeatherAPI fetch failed');
+      const data = await res.json();
+      summary = data.current?.condition?.text || summary;
+      temp = Math.round(data.current?.temp_c ?? 0);
+      wind = Math.round((data.current?.wind_kph ?? 0) / 3.6);
+      // WeatherAPI does not give 1h rain directly in current endpoint
+      const code = data.current?.condition?.code || 0;
+      conditions = {
+        id: mapWeatherApiCodeToOwmLike(code),
+        rain1h: 0,
+        snow1h: 0,
+        visibility: Math.round((data.current?.vis_km ?? 10) * 1000)
+      };
+    } else if (OWM_API_KEY) {
+      const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${OWM_API_KEY}&units=metric`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('OpenWeather fetch failed');
+      const data = await res.json();
+      summary = data.weather?.[0]?.description || summary;
+      temp = Math.round(data.main?.temp ?? 0);
+      wind = Math.round(data.wind?.speed ?? 0);
+      conditions = {
+        id: data.weather?.[0]?.id || 0,
+        rain1h: data.rain?.['1h'] || 0,
+        snow1h: data.snow?.['1h'] || 0,
+        visibility: data.visibility || 10000
+      };
+    }
+
+    const level = evaluateWeatherSafety({ temp, wind, ...conditions });
+    updateWeatherUI(level, `${summary} • ${temp}°C`, `Wind ${wind} m/s • Vis ${(conditions.visibility/1000).toFixed(1)} km`);
+  } catch (e) {
+    console.warn('Weather unavailable', e);
+  }
+}
+
+function evaluateWeatherSafety({ id, temp, wind, rain1h, snow1h, visibility }) {
+  // Danger if thunderstorms, heavy rain/snow, extreme temps, very high wind, low vis
+  const thunder = id >= 200 && id < 300;
+  const heavyRain = (id >= 500 && id < 600) && (rain1h >= 7);
+  const heavySnow = (id >= 600 && id < 700) && (snow1h >= 3);
+  const extremeHeat = temp >= 40;
+  const extremeCold = temp <= -10;
+  const highWind = wind >= 15; // ~54 km/h
+  const lowVis = visibility <= 1000;
+
+  if (thunder || heavyRain || heavySnow || extremeHeat || extremeCold || lowVis) return 'danger';
+  if (wind >= 10 || rain1h >= 3 || snow1h >= 1) return 'warning';
+  return 'safe';
+}
+
+// Feeds scaffold (placeholders for future integrations)
+async function fetchTrafficContext(lat, lng) {
+  // TODO: Integrate traffic API (e.g., TomTom HERE) for incidents/flow
+  return null;
+}
+
+async function fetchGovernmentFeeds(lat, lng) {
+  // TODO: Integrate local open data portals or CAP feeds
+  return null;
+}
+
+async function fetchCrowdsourcedSignals(lat, lng) {
+  // TODO: Integrate X/Twitter or other open signals with rate limits
+  return null;
+}
+
+function updateWeatherUI(level, summary, detail) {
+  if (!weatherCard || !weatherStatus) return;
+  weatherCard.style.display = 'block';
+  weatherStatus.classList.remove('weather-safe','weather-warning','weather-danger');
+  if (level === 'danger') weatherStatus.classList.add('weather-danger');
+  else if (level === 'warning') weatherStatus.classList.add('weather-warning');
+  else weatherStatus.classList.add('weather-safe');
+  if (weatherSummary) weatherSummary.textContent = level === 'danger' ? 'Unsafe weather – consider avoiding travel' : level === 'warning' ? 'Caution – conditions may be risky' : 'Safe to travel';
+  if (weatherDetail) weatherDetail.textContent = `${summary} • ${detail}`;
+}
+
+// Map WeatherAPI condition code roughly to OWM-like id buckets for our rules
+function mapWeatherApiCodeToOwmLike(code) {
+  // Thunder: 1000 clear, 1003-1009 cloud; 1087 thunder
+  if (code === 1087) return 200; // thunderstorm
+  // Drizzle/rain
+  if ([1063,1180,1183,1186,1189,1192,1195,1240,1243,1246].includes(code)) return 500; // rain
+  // Snow
+  if ([1066,1069,1114,1117,1210,1213,1216,1219,1222,1225,1255,1258].includes(code)) return 600; // snow
+  // Sleet/ice pellets
+  if ([1204,1207,1237,1261,1264].includes(code)) return 611; // sleet
+  // Fog/mist
+  if ([1030,1135,1147].includes(code)) return 741; // fog
+  // Extreme
+  if ([1273,1276,1279,1282].includes(code)) return 202; // heavy thunder
+  return 800; // clear/other
 }
