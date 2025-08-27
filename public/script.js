@@ -2,6 +2,7 @@ const socket = io();
 
 // Create maps for different views
 let map, map2;
+let homeCluster, incidentsCluster;
 
 // Initialize maps when their containers are visible
 function initializeMaps() {
@@ -14,6 +15,18 @@ function initializeMaps() {
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors"
     }).addTo(map);
+    // Create cluster group for home map
+    if (!homeCluster && window.L && L.markerClusterGroup) {
+      homeCluster = L.markerClusterGroup({
+        showCoverageOnHover: false,
+        maxClusterRadius: 60,
+        spiderfyOnEveryZoom: false,
+        spiderfyOnMaxZoom: true,
+        removeOutsideVisibleBounds: true,
+        iconCreateFunction: (cluster) => createClusterIcon(cluster)
+      });
+      map.addLayer(homeCluster);
+    }
     
     // Click on map to fill coordinates
     map.on("click", (e) => {
@@ -30,14 +43,31 @@ function initializeMaps() {
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors"
     }).addTo(map2);
+    // Create cluster group for incidents map
+    if (!incidentsCluster && window.L && L.markerClusterGroup) {
+      incidentsCluster = L.markerClusterGroup({
+        showCoverageOnHover: false,
+        maxClusterRadius: 60,
+        spiderfyOnEveryZoom: false,
+        spiderfyOnMaxZoom: true,
+        removeOutsideVisibleBounds: true,
+        iconCreateFunction: (cluster) => createClusterIcon(cluster)
+      });
+      map2.addLayer(incidentsCluster);
+    }
     
     // Load existing incidents on map2
     fetch("/api/incidents").then(r => r.json()).then((incidents) => {
       console.log('Loading incidents on map2:', incidents.length);
       incidents.forEach((incident) => {
-        const marker = L.marker([incident.lat, incident.lng]).addTo(map2);
+        const marker = L.marker([incident.lat, incident.lng]);
         const desc = incident.description ? incident.description : "No description";
         marker.bindPopup(`<b>${escapeHtml(incident.type)}</b><br>${escapeHtml(desc)}<br>${new Date(incident.timestamp).toLocaleString()}`);
+        if (incidentsCluster) {
+          incidentsCluster.addLayer(marker);
+        } else {
+          marker.addTo(map2);
+        }
       });
     });
   } else {
@@ -59,9 +89,14 @@ function initializeIncidentsMap() {
     fetch("/api/incidents").then(r => r.json()).then((incidents) => {
       console.log('Loading incidents on map2:', incidents.length);
       incidents.forEach((incident) => {
-        const marker = L.marker([incident.lat, incident.lng]).addTo(map2);
+        const marker = L.marker([incident.lat, incident.lng]);
         const desc = incident.description ? incident.description : "No description";
         marker.bindPopup(`<b>${escapeHtml(incident.type)}</b><br>${escapeHtml(desc)}<br>${new Date(incident.timestamp).toLocaleString()}`);
+        if (incidentsCluster) {
+          incidentsCluster.addLayer(marker);
+        } else {
+          marker.addTo(map2);
+        }
       });
     });
   }
@@ -189,18 +224,28 @@ form.addEventListener("submit", async (e) => {
 function addIncidentToMap(incident) {
   // Add to home map
   if (map) {
-    const marker = L.marker([incident.lat, incident.lng]).addTo(map);
+    const marker = L.marker([incident.lat, incident.lng]);
     const desc = incident.description ? incident.description : "No description";
     const img = incident.image ? `<div style="margin-top:6px;"><img src="${incident.image}" alt="incident image" style="max-width:220px; max-height:160px; border-radius:8px;"/></div>` : "";
     marker.bindPopup(`<b>${escapeHtml(incident.type)}</b><br>${escapeHtml(desc)}<br>${new Date(incident.timestamp).toLocaleString()}${img}`);
+    if (homeCluster) {
+      homeCluster.addLayer(marker);
+    } else {
+      marker.addTo(map);
+    }
   }
   
   // Add to incidents map
   if (map2) {
-    const marker2 = L.marker([incident.lat, incident.lng]).addTo(map2);
+    const marker2 = L.marker([incident.lat, incident.lng]);
     const desc = incident.description ? incident.description : "No description";
     const img = incident.image ? `<div style="margin-top:6px;"><img src="${incident.image}" alt="incident image" style="max-width:220px; max-height:160px; border-radius:8px;"/></div>` : "";
     marker2.bindPopup(`<b>${escapeHtml(incident.type)}</b><br>${escapeHtml(desc)}<br>${new Date(incident.timestamp).toLocaleString()}${img}`);
+    if (incidentsCluster) {
+      incidentsCluster.addLayer(marker2);
+    } else {
+      marker2.addTo(map2);
+    }
   }
 }
 
@@ -542,4 +587,14 @@ function compressImage(file, maxSize, quality) {
 function scaleToFit(w, h, max) {
   const ratio = Math.min(max / w, max / h, 1);
   return { width: Math.round(w * ratio), height: Math.round(h * ratio) };
+}
+
+// Cluster icon with count-based tiers
+function createClusterIcon(cluster) {
+  const count = cluster.getChildCount();
+  let c = ' marker-cluster-small';
+  if (count >= 50) c = ' marker-cluster-large';
+  else if (count >= 10) c = ' marker-cluster-medium';
+  const html = `<div><span>${count}</span></div>`;
+  return new L.DivIcon({ html, className: 'marker-cluster' + c, iconSize: new L.Point(40, 40) });
 }
