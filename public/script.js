@@ -74,6 +74,11 @@ const descEl = document.getElementById("description");
 const latEl = document.getElementById("lat");
 const lngEl = document.getElementById("lng");
 const locateMeBtn = document.getElementById("locateMe");
+const photoInput = document.getElementById("photo");
+const photoPreview = document.getElementById("photoPreview");
+const clearPhotoBtn = document.getElementById("clearPhoto");
+const uploadArea = document.getElementById('uploadArea');
+const uploadActions = document.getElementById('uploadActions');
 
 // Load existing incidents
 fetch("/api/incidents").then(r => r.json()).then((incidents) => {
@@ -144,6 +149,17 @@ form.addEventListener("submit", async (e) => {
   const description = descEl.value.trim();
   const lat = parseFloat(latEl.value);
   const lng = parseFloat(lngEl.value);
+  let imageDataUrl = null;
+
+  if (photoInput && photoInput.files && photoInput.files[0]) {
+    const file = photoInput.files[0];
+    try {
+      const compressed = await compressImage(file, 1600, 0.82);
+      imageDataUrl = await readFileAsDataURL(compressed);
+    } catch (err) {
+      console.error('Failed to read image', err);
+    }
+  }
 
   if (!type || !Number.isFinite(lat) || !Number.isFinite(lng)) {
     return alert("Please provide a type and valid coordinates.");
@@ -153,15 +169,17 @@ form.addEventListener("submit", async (e) => {
     const res = await fetch("/api/incidents", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, description, lat, lng })
+      body: JSON.stringify({ type, description, lat, lng, image: imageDataUrl })
     });
     if (!res.ok) {
       const { error } = await res.json().catch(() => ({ error: "Unknown error" }));
       return alert(error || "Failed to save incident");
     }
     const newIncident = await res.json();
+    if (imageDataUrl) newIncident.image = imageDataUrl;
     addIncidentToList(newIncident, true);
     form.reset();
+    resetPhotoUI();
   } catch (error) {
     console.error(error);
     alert("Network error while submitting incident");
@@ -173,14 +191,16 @@ function addIncidentToMap(incident) {
   if (map) {
     const marker = L.marker([incident.lat, incident.lng]).addTo(map);
     const desc = incident.description ? incident.description : "No description";
-    marker.bindPopup(`<b>${escapeHtml(incident.type)}</b><br>${escapeHtml(desc)}<br>${new Date(incident.timestamp).toLocaleString()}`);
+    const img = incident.image ? `<div style="margin-top:6px;"><img src="${incident.image}" alt="incident image" style="max-width:220px; max-height:160px; border-radius:8px;"/></div>` : "";
+    marker.bindPopup(`<b>${escapeHtml(incident.type)}</b><br>${escapeHtml(desc)}<br>${new Date(incident.timestamp).toLocaleString()}${img}`);
   }
   
   // Add to incidents map
   if (map2) {
     const marker2 = L.marker([incident.lat, incident.lng]).addTo(map2);
     const desc = incident.description ? incident.description : "No description";
-    marker2.bindPopup(`<b>${escapeHtml(incident.type)}</b><br>${escapeHtml(desc)}<br>${new Date(incident.timestamp).toLocaleString()}`);
+    const img = incident.image ? `<div style="margin-top:6px;"><img src="${incident.image}" alt="incident image" style="max-width:220px; max-height:160px; border-radius:8px;"/></div>` : "";
+    marker2.bindPopup(`<b>${escapeHtml(incident.type)}</b><br>${escapeHtml(desc)}<br>${new Date(incident.timestamp).toLocaleString()}${img}`);
   }
 }
 
@@ -199,6 +219,17 @@ function addIncidentToList(incident, prepend = false) {
   meta.textContent = `${incident.lat.toFixed(4)}, ${incident.lng.toFixed(4)} • ${new Date(incident.timestamp).toLocaleString()}`;
   info.appendChild(desc);
   info.appendChild(meta);
+
+  if (incident.image) {
+    const img = document.createElement('img');
+    img.src = incident.image;
+    img.alt = 'incident image';
+    img.style.maxWidth = '100%';
+    img.style.maxHeight = '180px';
+    img.style.borderRadius = '8px';
+    img.style.marginTop = '6px';
+    info.appendChild(img);
+  }
 
   const locateBtn = document.createElement("button");
   locateBtn.className = "btn btn-secondary";
@@ -397,3 +428,118 @@ async function loadAreaAnalytics() {
 
 // Footer year
 document.getElementById("year").textContent = new Date().getFullYear();
+
+// Photo input handlers
+photoInput?.addEventListener('change', async () => {
+  const file = photoInput.files && photoInput.files[0];
+  if (!file) { resetPhotoUI(); return; }
+  const previewBlob = await compressImage(file, 1600, 0.82).catch(() => file);
+  const url = URL.createObjectURL(previewBlob);
+  photoPreview.src = url;
+  photoPreview.style.display = 'block';
+  if (uploadActions) uploadActions.style.display = 'flex';
+  if (clearPhotoBtn) clearPhotoBtn.style.display = 'inline-flex';
+});
+
+clearPhotoBtn?.addEventListener('click', () => {
+  photoInput.value = '';
+  resetPhotoUI();
+});
+
+function resetPhotoUI() {
+  if (photoPreview) {
+    photoPreview.src = '';
+    photoPreview.style.display = 'none';
+  }
+  if (clearPhotoBtn) clearPhotoBtn.style.display = 'none';
+  if (uploadActions) uploadActions.style.display = 'none';
+}
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Drag & drop and paste support
+if (uploadArea) {
+  ['dragenter','dragover'].forEach(evt => uploadArea.addEventListener(evt, (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    uploadArea.classList.add('is-dragover');
+  }));
+  ['dragleave','drop'].forEach(evt => uploadArea.addEventListener(evt, (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    uploadArea.classList.remove('is-dragover');
+  }));
+  uploadArea.addEventListener('drop', async (e) => {
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const previewBlob = await compressImage(file, 1600, 0.82).catch(() => file);
+    const url = URL.createObjectURL(previewBlob);
+    photoPreview.src = url;
+    photoPreview.style.display = 'block';
+    if (uploadActions) uploadActions.style.display = 'flex';
+    if (clearPhotoBtn) clearPhotoBtn.style.display = 'inline-flex';
+    // Reflect into file input for form submission
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    photoInput.files = dt.files;
+  });
+
+  // Paste support
+  uploadArea.addEventListener('paste', async (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.type.startsWith('image/')) {
+        const file = it.getAsFile();
+        if (!file) continue;
+        const previewBlob = await compressImage(file, 1600, 0.82).catch(() => file);
+        const url = URL.createObjectURL(previewBlob);
+        photoPreview.src = url;
+        photoPreview.style.display = 'block';
+        if (uploadActions) uploadActions.style.display = 'flex';
+        if (clearPhotoBtn) clearPhotoBtn.style.display = 'inline-flex';
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        photoInput.files = dt.files;
+        break;
+      }
+    }
+  });
+}
+
+// Client-side image compression
+function compressImage(file, maxSize, quality) {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) return resolve(file);
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const { width, height } = scaleToFit(img.width, img.height, maxSize);
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        if (!blob) return reject(new Error('Compression failed'));
+        resolve(blob);
+      }, 'image/jpeg', quality);
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+function scaleToFit(w, h, max) {
+  const ratio = Math.min(max / w, max / h, 1);
+  return { width: Math.round(w * ratio), height: Math.round(h * ratio) };
+}
