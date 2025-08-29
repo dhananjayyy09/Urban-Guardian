@@ -10,7 +10,8 @@ const io = new Server(server);
 
 // Middleware
 app.use(express.static(path.join(__dirname, "public")));
-app.use(express.json());
+// Increase JSON body limit to allow base64 images
+app.use(express.json({ limit: '15mb' }));
 
 // Temp data store (later MongoDB)
 const DATA_DIR = path.join(__dirname, "data");
@@ -59,7 +60,7 @@ app.get("/api/incidents", (req, res) => {
 
 // API: post new incident
 app.post("/api/incidents", (req, res) => {
-  const { type, description, lat, lng } = req.body || {};
+  const { type, description, lat, lng, image } = req.body || {};
 
   const trimmedType = typeof type === "string" ? type.trim() : "";
   const cleanDescription = typeof description === "string" ? description.trim() : "";
@@ -74,6 +75,11 @@ app.post("/api/incidents", (req, res) => {
   }
 
   const incidents = loadIncidents();
+  // Only keep image if it's a data URL and reasonably sized
+  const safeImage = (typeof image === 'string' && image.startsWith('data:image/') && image.length <= 14 * 1024 * 1024)
+    ? image
+    : undefined;
+
   const newIncident = {
     id: Date.now(),
     type: trimmedType,
@@ -81,6 +87,7 @@ app.post("/api/incidents", (req, res) => {
     lat: numericLat,
     lng: numericLng,
     timestamp: new Date().toISOString(),
+    ...(safeImage ? { image: safeImage } : {})
   };
   incidents.push(newIncident);
   saveIncidents(incidents);

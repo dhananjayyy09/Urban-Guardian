@@ -110,8 +110,10 @@ const descEl = document.getElementById("description");
 const latEl = document.getElementById("lat");
 const lngEl = document.getElementById("lng");
 const locateMeBtn = document.getElementById("locateMe");
+const enableAlertsBtn = document.getElementById('enableAlerts');
 const photoInput = document.getElementById("photo");
 const photoPreview = document.getElementById("photoPreview");
+const photoMeta = document.getElementById('photoMeta');
 const clearPhotoBtn = document.getElementById("clearPhoto");
 const uploadArea = document.getElementById('uploadArea');
 const uploadActions = document.getElementById('uploadActions');
@@ -130,6 +132,7 @@ fetch("/api/incidents").then(r => r.json()).then((incidents) => {
   incidents.forEach((incident) => {
     addIncidentToMap(incident);
     addIncidentToList(incident);
+    maybeNotifyForIncident(incident);
   });
 });
 
@@ -149,6 +152,7 @@ setTimeout(() => {
 socket.on("new-incident", (incident) => {
   addIncidentToMap(incident);
   addIncidentToList(incident, true);
+  maybeNotifyForIncident(incident);
   
   // Refresh analytics if analytics tab is currently visible
   const activeNavTab = document.querySelector('.nav-tab-btn.active');
@@ -183,6 +187,70 @@ locateMeBtn?.addEventListener("click", () => {
     locateMeBtn.disabled = false;
   }, { enableHighAccuracy: true, timeout: 8000 });
 });
+
+// --- Proximity Alerts (2 km) ---
+let alertsEnabled = false;
+let userPosition = null; // { lat, lng }
+let positionWatchId = null;
+const NOTIFY_RADIUS_KM = 2;
+
+enableAlertsBtn?.addEventListener('click', async () => {
+  if (!('Notification' in window)) {
+    alert('Notifications are not supported in this browser.');
+    return;
+  }
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      alert('Please allow notifications to enable alerts.');
+      return;
+    }
+    alertsEnabled = true;
+    enableAlertsBtn.textContent = 'Alerts Enabled';
+    enableAlertsBtn.disabled = true;
+    // Start tracking location if not already
+    if (navigator.geolocation && positionWatchId == null) {
+      positionWatchId = navigator.geolocation.watchPosition((pos) => {
+        userPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      }, (err) => {
+        console.warn('Geolocation watch failed', err);
+      }, { enableHighAccuracy: true, maximumAge: 15000, timeout: 8000 });
+    }
+    // On enabling, evaluate currently loaded incidents
+    fetch('/api/incidents').then(r => r.json()).then(list => {
+      list.forEach(maybeNotifyForIncident);
+    }).catch(() => {});
+  } catch (e) {
+    console.error('Notification setup failed', e);
+  }
+});
+
+function maybeNotifyForIncident(incident) {
+  if (!alertsEnabled || !userPosition) return;
+  const distanceKm = haversineKm(userPosition.lat, userPosition.lng, incident.lat, incident.lng);
+  if (distanceKm <= NOTIFY_RADIUS_KM) {
+    try {
+      const title = `Nearby ${incident.type}`;
+      const body = `${(distanceKm).toFixed(1)} km away • ${new Date(incident.timestamp).toLocaleTimeString()}`;
+      const icon = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🛡️</text></svg>';
+      new Notification(title, { body, icon });
+    } catch (e) {
+      // Fallback if Notification fails
+      console.warn('Notification failed, falling back to alert');
+      alert(`Nearby ${incident.type} • ${(distanceKm).toFixed(1)} km away`);
+    }
+  }
+}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const toRad = (v) => v * Math.PI / 180;
+  const R = 6371; // Earth radius km
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 // Form submission
 form.addEventListener("submit", async (e) => {
@@ -487,16 +555,41 @@ async function loadAreaAnalytics() {
 // Footer year
 document.getElementById("year").textContent = new Date().getFullYear();
 
-// Photo input handlers
+// Photo input handlers with validation
 photoInput?.addEventListener('change', async () => {
   const file = photoInput.files && photoInput.files[0];
   if (!file) { resetPhotoUI(); return; }
-  const previewBlob = await compressImage(file, 1600, 0.82).catch(() => file);
-  const url = URL.createObjectURL(previewBlob);
-  photoPreview.src = url;
-  photoPreview.style.display = 'block';
-  if (uploadActions) uploadActions.style.display = 'flex';
-  if (clearPhotoBtn) clearPhotoBtn.style.display = 'inline-flex';
+  // Basic validations
+  if (!file.type.startsWith('image/')) {
+    alert('Please select an image file.');
+    photoInput.value = '';
+    resetPhotoUI();
+    return;
+  }
+  const maxRawSize = 8 * 1024 * 1024; // 8MB limit before compression
+  if (file.size > maxRawSize) {
+    alert('Image is too large (max 8MB). Please choose a smaller one.');
+    photoInput.value = '';
+    resetPhotoUI();
+    return;
+  }
+  try {
+    const previewBlob = await compressImage(file, 1600, 0.82).catch(() => file);
+    const url = URL.createObjectURL(previewBlob);
+    photoPreview.src = url;
+    photoPreview.style.display = 'block';
+    if (photoMeta) {
+      photoMeta.textContent = `${file.name || 'image'} • ${(file.size/1024).toFixed(0)} KB`;
+      photoMeta.style.display = 'block';
+    }
+    if (uploadActions) uploadActions.style.display = 'flex';
+    if (clearPhotoBtn) clearPhotoBtn.style.display = 'inline-flex';
+  } catch (e) {
+    console.error('Preview failed', e);
+    alert('Could not preview this image. Try a different file.');
+    photoInput.value = '';
+    resetPhotoUI();
+  }
 });
 
 clearPhotoBtn?.addEventListener('click', () => {
@@ -508,6 +601,10 @@ function resetPhotoUI() {
   if (photoPreview) {
     photoPreview.src = '';
     photoPreview.style.display = 'none';
+  }
+  if (photoMeta) {
+    photoMeta.textContent = '—';
+    photoMeta.style.display = 'none';
   }
   if (clearPhotoBtn) clearPhotoBtn.style.display = 'none';
   if (uploadActions) uploadActions.style.display = 'none';
@@ -536,17 +633,29 @@ if (uploadArea) {
   }));
   uploadArea.addEventListener('drop', async (e) => {
     const file = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (!file || !file.type.startsWith('image/')) return;
-    const previewBlob = await compressImage(file, 1600, 0.82).catch(() => file);
-    const url = URL.createObjectURL(previewBlob);
-    photoPreview.src = url;
-    photoPreview.style.display = 'block';
-    if (uploadActions) uploadActions.style.display = 'flex';
-    if (clearPhotoBtn) clearPhotoBtn.style.display = 'inline-flex';
-    // Reflect into file input for form submission
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    photoInput.files = dt.files;
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { alert('Please drop an image.'); return; }
+    const maxRawSize = 8 * 1024 * 1024;
+    if (file.size > maxRawSize) { alert('Image is too large (max 8MB).'); return; }
+    try {
+      const previewBlob = await compressImage(file, 1600, 0.82).catch(() => file);
+      const url = URL.createObjectURL(previewBlob);
+      photoPreview.src = url;
+      photoPreview.style.display = 'block';
+      if (photoMeta) {
+        photoMeta.textContent = `${file.name || 'image'} • ${(file.size/1024).toFixed(0)} KB`;
+        photoMeta.style.display = 'block';
+      }
+      if (uploadActions) uploadActions.style.display = 'flex';
+      if (clearPhotoBtn) clearPhotoBtn.style.display = 'inline-flex';
+      // Reflect into file input for form submission
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      photoInput.files = dt.files;
+    } catch (err) {
+      console.error('Drop preview failed', err);
+      alert('Could not preview this image.');
+    }
   });
 
   // Paste support
@@ -558,15 +667,26 @@ if (uploadArea) {
       if (it.type.startsWith('image/')) {
         const file = it.getAsFile();
         if (!file) continue;
-        const previewBlob = await compressImage(file, 1600, 0.82).catch(() => file);
-        const url = URL.createObjectURL(previewBlob);
-        photoPreview.src = url;
-        photoPreview.style.display = 'block';
-        if (uploadActions) uploadActions.style.display = 'flex';
-        if (clearPhotoBtn) clearPhotoBtn.style.display = 'inline-flex';
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        photoInput.files = dt.files;
+        const maxRawSize = 8 * 1024 * 1024;
+        if (file.size > maxRawSize) { alert('Image is too large (max 8MB).'); return; }
+        try {
+          const previewBlob = await compressImage(file, 1600, 0.82).catch(() => file);
+          const url = URL.createObjectURL(previewBlob);
+          photoPreview.src = url;
+          photoPreview.style.display = 'block';
+          if (photoMeta) {
+            photoMeta.textContent = `${file.name || 'image'} • ${(file.size/1024).toFixed(0)} KB`;
+            photoMeta.style.display = 'block';
+          }
+          if (uploadActions) uploadActions.style.display = 'flex';
+          if (clearPhotoBtn) clearPhotoBtn.style.display = 'inline-flex';
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          photoInput.files = dt.files;
+        } catch (err) {
+          console.error('Paste preview failed', err);
+          alert('Could not preview this image.');
+        }
         break;
       }
     }
