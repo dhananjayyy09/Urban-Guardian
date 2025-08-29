@@ -249,34 +249,36 @@ let positionWatchId = null;
 const NOTIFY_RADIUS_KM = 2;
 
 enableAlertsBtn?.addEventListener('click', async () => {
-  if (!('Notification' in window)) {
-    showToast('Notifications unavailable', 'Your browser does not support notifications.');
-    return;
+  let permission = 'default';
+  if ('Notification' in window) {
+    try { permission = await Notification.requestPermission(); } catch (_) { permission = 'default'; }
+  } else {
+    showToast('Notifications unavailable', 'Using in-app alerts instead.');
   }
-  try {
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
-      showToast('Permission needed', 'Allow notifications to enable alerts.');
-      return;
-    }
-    alertsEnabled = true;
-    enableAlertsBtn.textContent = 'Alerts Enabled';
-    enableAlertsBtn.disabled = true;
-    // Start tracking location if not already
-    if (navigator.geolocation && positionWatchId == null) {
-      positionWatchId = navigator.geolocation.watchPosition((pos) => {
-        userPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      }, (err) => {
-        console.warn('Geolocation watch failed', err);
-      }, { enableHighAccuracy: true, maximumAge: 15000, timeout: 8000 });
-    }
-    // On enabling, evaluate currently loaded incidents
-    fetch('/api/incidents').then(r => r.json()).then(list => {
-      list.forEach(maybeNotifyForIncident);
-    }).catch(() => {});
-  } catch (e) {
-    console.error('Notification setup failed', e);
+
+  alertsEnabled = true; // Always enable alerts; will fallback to toasts if no permission
+  enableAlertsBtn.textContent = 'Alerts Enabled';
+  enableAlertsBtn.disabled = true;
+
+  if (permission !== 'granted') {
+    showToast('Alerts enabled', 'System notifications blocked; showing in-app alerts.');
+  } else {
+    showToast('Alerts enabled', 'You will receive nearby incident notifications.');
   }
+
+  // Start tracking location if not already
+  if (navigator.geolocation && positionWatchId == null) {
+    positionWatchId = navigator.geolocation.watchPosition((pos) => {
+      userPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    }, (err) => {
+      console.warn('Geolocation watch failed', err);
+    }, { enableHighAccuracy: true, maximumAge: 15000, timeout: 8000 });
+  }
+
+  // On enabling, evaluate currently loaded incidents
+  fetch('/api/incidents').then(r => r.json()).then(list => {
+    list.forEach(maybeNotifyForIncident);
+  }).catch(() => {});
 });
 
 function maybeNotifyForIncident(incident) {
