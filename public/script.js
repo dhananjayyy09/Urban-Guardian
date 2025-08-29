@@ -76,6 +76,32 @@ function initializeMaps() {
   }
 }
 
+// Fullscreen toggles for maps
+mapMaxButtons.forEach(btn => {
+  btn.addEventListener('click', () => toggleMapFullscreen(btn.dataset.target));
+});
+
+function toggleMapFullscreen(targetId) {
+  const panel = document.getElementById(targetId)?.closest('.map-panel');
+  if (!panel) return;
+  const isFs = panel.classList.toggle('fullscreen');
+  // Add or swap toolbar button
+  const toolbar = panel.querySelector('.map-toolbar');
+  if (toolbar) {
+    toolbar.innerHTML = '';
+    const button = document.createElement('button');
+    button.className = 'btn btn-secondary ' + (isFs ? 'map-min' : 'map-max');
+    button.textContent = isFs ? 'Minimize' : 'Maximize';
+    button.addEventListener('click', () => toggleMapFullscreen(targetId));
+    toolbar.appendChild(button);
+  }
+  // Ensure Leaflet map resizes correctly
+  setTimeout(() => {
+    if (targetId === 'map' && map) map.invalidateSize();
+    if (targetId === 'map2' && map2) map2.invalidateSize();
+  }, 200);
+}
+
 // Initialize incidents map specifically
 function initializeIncidentsMap() {
   const map2Container = document.getElementById('map2');
@@ -111,6 +137,7 @@ const latEl = document.getElementById("lat");
 const lngEl = document.getElementById("lng");
 const locateMeBtn = document.getElementById("locateMe");
 const enableAlertsBtn = document.getElementById('enableAlerts');
+const mapMaxButtons = document.querySelectorAll('.map-max');
 const photoInput = document.getElementById("photo");
 const photoPreview = document.getElementById("photoPreview");
 const photoMeta = document.getElementById('photoMeta');
