@@ -123,6 +123,7 @@ const weatherSummary = document.getElementById('weatherSummary');
 const weatherDetail = document.getElementById('weatherDetail');
 const OWM_API_KEY = document.querySelector('meta[name="owm-api-key"]')?.content || '';
 const WEATHERAPI_KEY = document.querySelector('meta[name="weatherapi-key"]')?.content || '';
+const toastContainer = document.getElementById('toastContainer');
 
 // Load existing incidents
 fetch("/api/incidents").then(r => r.json()).then((incidents) => {
@@ -172,21 +173,46 @@ socket.on("new-incident", (incident) => {
 
 // Geolocate
 locateMeBtn?.addEventListener("click", () => {
-  if (!navigator.geolocation) return alert("Geolocation is not supported by your browser");
+  if (!navigator.geolocation) { showToast('Location unavailable', 'Geolocation is not supported by your browser.'); return; }
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+    showToast('Secure context required', 'Enable HTTPS for precise location on mobile.');
+  }
   locateMeBtn.disabled = true;
-  navigator.geolocation.getCurrentPosition((pos) => {
-    const { latitude, longitude } = pos.coords;
-    map.setView([latitude, longitude], 15);
-    latEl.value = latitude.toFixed(6);
-    lngEl.value = longitude.toFixed(6);
-    checkWeather(latitude, longitude);
-    locateMeBtn.disabled = false;
-  }, (err) => {
-    alert("Could not get your location");
-    console.error(err);
-    locateMeBtn.disabled = false;
-  }, { enableHighAccuracy: true, timeout: 8000 });
+  getAccuratePosition({ attempts: 2, highAccuracy: true, timeout: 9000 })
+    .then(({ latitude, longitude }) => {
+      map.setView([latitude, longitude], 15);
+      latEl.value = latitude.toFixed(6);
+      lngEl.value = longitude.toFixed(6);
+      checkWeather(latitude, longitude);
+    })
+    .catch((err) => {
+      console.error('Geolocation failed', err);
+      showToast('Location failed', 'Could not determine your location. Check permissions and GPS.');
+    })
+    .finally(() => { locateMeBtn.disabled = false; });
 });
+
+function getAccuratePosition({ attempts = 2, highAccuracy = true, timeout = 9000 } = {}) {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject(new Error('no geolocation'));
+    let done = false;
+    const tryOnce = (useHighAccuracy, to) => {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        if (done) return; done = true;
+        resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+      }, (err) => {
+        if (attempts > 0) {
+          attempts -= 1;
+          // fallback to lower accuracy and extended timeout
+          tryOnce(false, to + 4000);
+        } else {
+          reject(err);
+        }
+      }, { enableHighAccuracy: useHighAccuracy, timeout: to });
+    };
+    tryOnce(highAccuracy, timeout);
+  });
+}
 
 // --- Proximity Alerts (2 km) ---
 let alertsEnabled = false;
@@ -196,13 +222,13 @@ const NOTIFY_RADIUS_KM = 2;
 
 enableAlertsBtn?.addEventListener('click', async () => {
   if (!('Notification' in window)) {
-    alert('Notifications are not supported in this browser.');
+    showToast('Notifications unavailable', 'Your browser does not support notifications.');
     return;
   }
   try {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
-      alert('Please allow notifications to enable alerts.');
+      showToast('Permission needed', 'Allow notifications to enable alerts.');
       return;
     }
     alertsEnabled = true;
@@ -233,11 +259,15 @@ function maybeNotifyForIncident(incident) {
       const title = `Nearby ${incident.type}`;
       const body = `${(distanceKm).toFixed(1)} km away • ${new Date(incident.timestamp).toLocaleTimeString()}`;
       const icon = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🛡️</text></svg>';
-      new Notification(title, { body, icon });
+      if (document.hasFocus() || Notification.permission !== 'granted') {
+        showToast(title, body);
+      } else {
+        new Notification(title, { body, icon });
+      }
     } catch (e) {
       // Fallback if Notification fails
-      console.warn('Notification failed, falling back to alert');
-      alert(`Nearby ${incident.type} • ${(distanceKm).toFixed(1)} km away`);
+      console.warn('Notification failed, falling back to toast');
+      showToast(`Nearby ${incident.type}`, `${(distanceKm).toFixed(1)} km away`);
     }
   }
 }
@@ -250,6 +280,20 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   const a = Math.sin(dLat/2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+}
+
+// --- Toast helpers ---
+function showToast(title, body) {
+  if (!toastContainer) return;
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `<div class="toast-title">${escapeHtml(title)}</div><div class="toast-body">${escapeHtml(body || '')}</div>`;
+  toastContainer.appendChild(el);
+  setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transition = 'opacity .4s ease';
+    setTimeout(() => el.remove(), 450);
+  }, 3500);
 }
 
 // Form submission
