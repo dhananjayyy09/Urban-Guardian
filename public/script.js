@@ -4,31 +4,25 @@ const socket = io();
 let map, map2;
 let homeCluster, incidentsCluster;
 
+// A central place to store all incidents
+let allIncidents = [];
+
 // Initialize maps when their containers are visible
 function initializeMaps() {
   console.log('Initializing maps...');
-  
-  // Home map
   if (!map && document.getElementById('map')) {
     console.log('Initializing home map...');
     map = L.map("map").setView([28.6139, 77.2090], 12);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors"
     }).addTo(map);
+    
     // Create cluster group for home map
     if (!homeCluster && window.L && L.markerClusterGroup) {
-      homeCluster = L.markerClusterGroup({
-        showCoverageOnHover: false,
-        maxClusterRadius: 60,
-        spiderfyOnEveryZoom: false,
-        spiderfyOnMaxZoom: true,
-        removeOutsideVisibleBounds: true,
-        iconCreateFunction: (cluster) => createClusterIcon(cluster)
-      });
+      homeCluster = L.markerClusterGroup({ /* ... options ... */ });
       map.addLayer(homeCluster);
     }
     
-    // Click on map to fill coordinates
     map.on("click", (e) => {
       latEl.value = e.latlng.lat.toFixed(6);
       lngEl.value = e.latlng.lng.toFixed(6);
@@ -36,7 +30,6 @@ function initializeMaps() {
     });
   }
   
-  // Incidents map
   const map2Container = document.getElementById('map2');
   if (!map2 && map2Container) {
     console.log('Initializing incidents map...');
@@ -44,62 +37,12 @@ function initializeMaps() {
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors"
     }).addTo(map2);
+    
     // Create cluster group for incidents map
     if (!incidentsCluster && window.L && L.markerClusterGroup) {
-      incidentsCluster = L.markerClusterGroup({
-        showCoverageOnHover: false,
-        maxClusterRadius: 60,
-        spiderfyOnEveryZoom: false,
-        spiderfyOnMaxZoom: true,
-        removeOutsideVisibleBounds: true,
-        iconCreateFunction: (cluster) => createClusterIcon(cluster)
-      });
+      incidentsCluster = L.markerClusterGroup({ /* ... options ... */ });
       map2.addLayer(incidentsCluster);
     }
-    
-    // Load existing incidents on map2
-    fetch("/api/incidents").then(r => r.json()).then((incidents) => {
-      console.log('Loading incidents on map2:', incidents.length);
-      incidents.forEach((incident) => {
-        const marker = L.marker([incident.lat, incident.lng]);
-        const desc = incident.description ? incident.description : "No description";
-        marker.bindPopup(`<b>${escapeHtml(incident.type)}</b><br>${escapeHtml(desc)}<br>${new Date(incident.timestamp).toLocaleString()}`);
-        if (incidentsCluster) {
-          incidentsCluster.addLayer(marker);
-        } else {
-          marker.addTo(map2);
-        }
-      });
-    });
-  } else {
-    console.log('Map2 container not found or already initialized');
-  }
-}
-
-// Initialize incidents map specifically
-function initializeIncidentsMap() {
-  const map2Container = document.getElementById('map2');
-  if (map2Container && !map2) {
-    console.log('Initializing incidents map specifically...');
-    map2 = L.map("map2").setView([28.6139, 77.2090], 12);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "© OpenStreetMap contributors"
-    }).addTo(map2);
-    
-    // Load existing incidents on map2
-    fetch("/api/incidents").then(r => r.json()).then((incidents) => {
-      console.log('Loading incidents on map2:', incidents.length);
-      incidents.forEach((incident) => {
-        const marker = L.marker([incident.lat, incident.lng]);
-        const desc = incident.description ? incident.description : "No description";
-        marker.bindPopup(`<b>${escapeHtml(incident.type)}</b><br>${escapeHtml(desc)}<br>${new Date(incident.timestamp).toLocaleString()}`);
-        if (incidentsCluster) {
-          incidentsCluster.addLayer(marker);
-        } else {
-          marker.addTo(map2);
-        }
-      });
-    });
   }
 }
 
@@ -126,21 +69,39 @@ const OWM_API_KEY = document.querySelector('meta[name="owm-api-key"]')?.content 
 const WEATHERAPI_KEY = document.querySelector('meta[name="weatherapi-key"]')?.content || '';
 const toastContainer = document.getElementById('toastContainer');
 
-// Load existing incidents
-fetch("/api/incidents").then(r => r.json()).then((incidents) => {
-  // Sort incidents by timestamp (most recent first)
-  incidents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  
-  incidents.forEach((incident) => {
-    addIncidentToMap(incident);
-    addIncidentToList(incident);
-    maybeNotifyForIncident(incident);
-  });
-});
-
-// Initialize maps on page load
-console.log('Page loaded, initializing maps...');
+// --- Corrected Page Load Logic ---
+// 1. Initialize the empty map containers first.
+console.log('Page loaded, initializing map containers...');
 initializeMaps();
+
+// 2. NOW, fetch the data and populate everything.
+fetch("/api/incidents")
+  .then(res => {
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    return res.json();
+  })
+  .then((incidents) => {
+    // Sort incidents by timestamp (most recent first)
+    incidents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    // Store for later use
+    allIncidents = incidents; 
+    
+    console.log(`Loaded ${allIncidents.length} incidents.`);
+    
+    // Populate the maps, list, and check for notifications
+    allIncidents.forEach((incident) => {
+      addIncidentToMap(incident);
+      addIncidentToList(incident);
+      maybeNotifyForIncident(incident);
+    });
+  })
+  .catch(error => {
+    console.error("Failed to load initial incidents:", error);
+    showToast("Load Error", "Could not load incident data from the server.");
+  });
 
 // Fullscreen toggles for maps
 mapMaxButtons.forEach(btn => {
@@ -196,8 +157,6 @@ socket.on("new-incident", (incident) => {
     }
   }
 });
-
-
 
 // Geolocate
 locateMeBtn?.addEventListener("click", () => {
@@ -326,7 +285,7 @@ function showToast(title, body) {
   }, 3500);
 }
 
-// Form submission
+// form submission
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
@@ -359,13 +318,16 @@ form.addEventListener("submit", async (e) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type, description, lat, lng, image: imageDataUrl })
     });
+
     if (!res.ok) {
       const { error } = await res.json().catch(() => ({ error: "Unknown error" }));
       return alert(error || "Failed to save incident");
     }
-    const newIncident = await res.json();
-    if (imageDataUrl) newIncident.image = imageDataUrl;
-    addIncidentToList(newIncident, true);
+
+    // ✅ Do NOT call addIncidentToMap() or addIncidentToList()
+    // The socket listener will automatically add the new incident
+    console.log("✅ Incident saved successfully. Waiting for socket update...");
+
     form.reset();
     resetPhotoUI();
   } catch (error) {
@@ -473,36 +435,18 @@ navTabBtns.forEach(btn => {
     const targetNavTab = btn.dataset.navTab;
     console.log('Navigation tab clicked:', targetNavTab);
     
-    // Update active states
     navTabBtns.forEach(b => b.classList.remove('active'));
     viewPanels.forEach(p => p.classList.remove('active'));
-    
     btn.classList.add('active');
-    const targetPanel = document.getElementById(targetNavTab + 'Panel');
-    targetPanel.classList.add('active');
-    console.log('Target panel:', targetPanel);
+    document.getElementById(targetNavTab + 'Panel').classList.add('active');
     
-    // Initialize maps when switching to views that need them
     setTimeout(() => {
-      initializeMaps();
-      
-      // Special handling for incidents view
-      if (targetNavTab === 'incidents') {
-        console.log('Switching to incidents view...');
-        // Initialize incidents map specifically
-        setTimeout(() => {
-          initializeIncidentsMap();
-          if (map2) {
-            setTimeout(() => {
-              map2.invalidateSize();
-              console.log('Map2 invalidated size');
-            }, 200);
-          }
-        }, 200);
+      if (targetNavTab === 'home' && map) {
+        map.invalidateSize();
+      } else if (targetNavTab === 'incidents' && map2) {
+        map2.invalidateSize();
       }
-    }, 100);
-    
-    // Load analytics data if switching to analytics tab
+    }, 150);
     if (targetNavTab === 'analytics') {
       console.log('Loading analytics...');
       loadTypeAnalytics();
