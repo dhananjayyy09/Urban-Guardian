@@ -57,8 +57,8 @@ db.getConnection()
 app.post('/api/incidents', async (req, res) => {
   const { type, description, lat, lng, image } = req.body; // Image comes from body
 
-  if (!type || lat == null || lng == null) {
-      return res.status(400).json({ error: 'Missing required fields: type, lat, lng' });
+  if (!type || lat == null || lng == null || !image) {
+      return res.status(400).json({ error: 'Missing required fields: type, lat, lng, Image' });
   }
 
   const sql = `INSERT INTO incidents (type, description, lat, lng, image) VALUES (?, ?, ?, ?, ?)`;
@@ -122,9 +122,6 @@ app.delete('/api/incidents/:id', async (req, res) => {
     return res.status(500).json({ error: 'Database delete failed' });
   }
 });
-
-
-// --- NEW: Analytics Routes ---
 
 // GET: Analytics for incident types
 app.get('/api/analytics/types', async (req, res) => {

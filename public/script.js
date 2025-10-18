@@ -1,10 +1,7 @@
 const socket = io();
-
-// Create maps for different views
 let map, map2;
 let homeCluster, incidentsCluster;
-
-// A central place to store all incidents
+let homeHeatmap, incidentsHeatmap;
 let allIncidents = [];
 
 // Initialize maps when their containers are visible
@@ -21,6 +18,23 @@ function initializeMaps() {
     if (!homeCluster && window.L && L.markerClusterGroup) {
       homeCluster = L.markerClusterGroup({ /* ... options ... */ });
       map.addLayer(homeCluster);
+    }
+    
+    // Initialize heatmap for home map
+    if (!homeHeatmap && window.L && L.heatLayer) {
+      homeHeatmap = L.heatLayer([], {
+        radius: 25,
+        blur: 15,
+        maxZoom: 17,
+        max: 1.0,
+        gradient: {
+          0.4: 'blue',
+          0.6: 'cyan',
+          0.7: 'lime',
+          0.8: 'yellow',
+          1.0: 'red'
+        }
+      });
     }
     
     map.on("click", (e) => {
@@ -42,6 +56,23 @@ function initializeMaps() {
     if (!incidentsCluster && window.L && L.markerClusterGroup) {
       incidentsCluster = L.markerClusterGroup({ /* ... options ... */ });
       map2.addLayer(incidentsCluster);
+    }
+    
+    // Initialize heatmap for incidents map
+    if (!incidentsHeatmap && window.L && L.heatLayer) {
+      incidentsHeatmap = L.heatLayer([], {
+        radius: 25,
+        blur: 15,
+        maxZoom: 17,
+        max: 1.0,
+        gradient: {
+          0.4: 'blue',
+          0.6: 'cyan',
+          0.7: 'lime',
+          0.8: 'yellow',
+          1.0: 'red'
+        }
+      });
     }
   }
 }
@@ -97,6 +128,10 @@ fetch("/api/incidents")
       addIncidentToList(incident);
       maybeNotifyForIncident(incident);
     });
+    
+    // Initialize heatmaps with all incidents
+    updateHeatmap(map, homeHeatmap, allIncidents);
+    updateHeatmap(map2, incidentsHeatmap, allIncidents);
   })
   .catch(error => {
     console.error("Failed to load initial incidents:", error);
@@ -106,6 +141,43 @@ fetch("/api/incidents")
 // Fullscreen toggles for maps
 mapMaxButtons.forEach(btn => {
   btn.addEventListener('click', () => toggleMapFullscreen(btn.dataset.target));
+});
+
+// Heatmap toggle functionality
+const heatmapToggleButtons = document.querySelectorAll('.heatmap-toggle');
+let heatmapStates = { home: false, incidents: false };
+
+heatmapToggleButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const targetMap = btn.dataset.target;
+    const heatmapType = btn.dataset.heatmap;
+    
+    // Toggle heatmap state
+    heatmapStates[heatmapType] = !heatmapStates[heatmapType];
+    
+    // Get the appropriate map and heatmap layer
+    let mapInstance, heatmapLayer;
+    if (targetMap === 'map') {
+      mapInstance = map;
+      heatmapLayer = homeHeatmap;
+    } else if (targetMap === 'map2') {
+      mapInstance = map2;
+      heatmapLayer = incidentsHeatmap;
+    }
+    
+    // Toggle heatmap visibility
+    toggleHeatmap(mapInstance, heatmapLayer, heatmapStates[heatmapType]);
+    
+    // Update button text and styling
+    btn.textContent = heatmapStates[heatmapType] ? 'Hide Heatmap' : 'Show Heatmap';
+    btn.classList.toggle('active', heatmapStates[heatmapType]);
+    
+    // Show toast notification
+    const action = heatmapStates[heatmapType] ? 'enabled' : 'disabled';
+    showToast('Heatmap ' + action, heatmapStates[heatmapType] ? 
+      'Red areas indicate high incident density. Avoid these areas for safety.' : 
+      'Heatmap hidden. Individual incident markers are still visible.');
+  });
 });
 
 function toggleMapFullscreen(targetId) {
@@ -140,9 +212,14 @@ setTimeout(() => {
 
 // Real-time updates
 socket.on("new-incident", (incident) => {
+  allIncidents.unshift(incident); // Add to beginning of array
   addIncidentToMap(incident);
   addIncidentToList(incident, true);
   maybeNotifyForIncident(incident);
+  
+  // Update heatmaps with new incident
+  updateHeatmap(map, homeHeatmap, allIncidents);
+  updateHeatmap(map2, incidentsHeatmap, allIncidents);
   
   // Refresh analytics if analytics tab is currently visible
   const activeNavTab = document.querySelector('.nav-tab-btn.active');
@@ -271,6 +348,60 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
+// Heatmap functionality
+function processIncidentsForHeatmap(incidents) {
+  const now = Date.now();
+  const oneDay = 24 * 60 * 60 * 1000;
+  const oneWeek = 7 * oneDay;
+  
+  return incidents.map(incident => {
+    const age = now - new Date(incident.timestamp).getTime();
+    
+    // Base intensity by incident type
+    let baseIntensity = 0.3;
+    switch(incident.type.toLowerCase()) {
+      case 'crime': baseIntensity = 0.8; break;
+      case 'fire': baseIntensity = 0.9; break;
+      case 'accident': baseIntensity = 0.7; break;
+      case 'medical': baseIntensity = 0.6; break;
+      case 'hazard': baseIntensity = 0.5; break;
+      case 'earthquake': baseIntensity = 1.0; break;
+      default: baseIntensity = 0.4;
+    }
+    
+    // Time decay factor - recent incidents are more intense
+    let timeFactor = 1.0;
+    if (age < oneDay) {
+      timeFactor = 1.0; // Very recent
+    } else if (age < oneWeek) {
+      timeFactor = 0.7; // Recent
+    } else {
+      timeFactor = 0.3; // Older
+    }
+    
+    const intensity = Math.min(baseIntensity * timeFactor, 1.0);
+    
+    return [incident.lat, incident.lng, intensity];
+  });
+}
+
+function updateHeatmap(mapInstance, heatmapLayer, incidents) {
+  if (!mapInstance || !heatmapLayer) return;
+  
+  const heatmapData = processIncidentsForHeatmap(incidents);
+  heatmapLayer.setLatLngs(heatmapData);
+}
+
+function toggleHeatmap(mapInstance, heatmapLayer, isVisible) {
+  if (!mapInstance || !heatmapLayer) return;
+  
+  if (isVisible) {
+    mapInstance.addLayer(heatmapLayer);
+  } else {
+    mapInstance.removeLayer(heatmapLayer);
+  }
+}
+
 // --- Toast helpers ---
 function showToast(title, body) {
   if (!toastContainer) return;
@@ -305,8 +436,8 @@ form.addEventListener("submit", async (e) => {
     }
   }
 
-  if (!type || !Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return alert("Please provide a type and valid coordinates.");
+  if (!type || !Number.isFinite(lat) || !Number.isFinite(lng || !imageDataUrl)) {
+    return alert("Please fill in all required fields including a photo.");
   }
 
   // Optional: check weather at submit time as well
@@ -323,11 +454,7 @@ form.addEventListener("submit", async (e) => {
       const { error } = await res.json().catch(() => ({ error: "Unknown error" }));
       return alert(error || "Failed to save incident");
     }
-
-    // ✅ Do NOT call addIncidentToMap() or addIncidentToList()
-    // The socket listener will automatically add the new incident
     console.log("✅ Incident saved successfully. Waiting for socket update...");
-
     form.reset();
     resetPhotoUI();
   } catch (error) {
@@ -815,17 +942,14 @@ function evaluateWeatherSafety({ id, temp, wind, rain1h, snow1h, visibility }) {
 
 // Feeds scaffold (placeholders for future integrations)
 async function fetchTrafficContext(lat, lng) {
-  // TODO: Integrate traffic API (e.g., TomTom HERE) for incidents/flow
   return null;
 }
 
 async function fetchGovernmentFeeds(lat, lng) {
-  // TODO: Integrate local open data portals or CAP feeds
   return null;
 }
 
 async function fetchCrowdsourcedSignals(lat, lng) {
-  // TODO: Integrate X/Twitter or other open signals with rate limits
   return null;
 }
 

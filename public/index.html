@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -11,13 +12,15 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <link rel="stylesheet" href="style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27><text y=%27.9em%27 font-size=%2790%27>🛡️</text></svg>">
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27><text y=%27.9em%27 font-size=%2790%27>🛡️</text></svg>">
   <meta name="description" content="Urban Guardian – Real-time safety map to report and view incidents near you.">
   <!-- Set your OpenWeatherMap API key here -->
   <meta name="owm-api-key" content="">
   <!-- Or use WeatherAPI.com key instead (preferred if set) -->
   <meta name="weatherapi-key" content="c987651cd2934c6fa41174926250902">
 </head>
+
 <body>
   <header class="site-header">
     <div class="container header-inner">
@@ -32,7 +35,8 @@
       </nav>
       <nav class="actions">
         <button id="locateMe" class="btn btn-secondary">Use my location</button>
-        <button id="enableAlerts" class="btn btn-secondary" title="Get notified about nearby incidents">Enable Alerts</button>
+        <button id="enableAlerts" class="btn btn-secondary" title="Get notified about nearby incidents">Enable
+          Alerts</button>
       </nav>
     </div>
   </header>
@@ -42,11 +46,14 @@
     <div id="homePanel" class="view-panel active">
       <section class="layout">
         <div class="map-panel">
-          <div class="map-toolbar"><button class="btn btn-secondary map-max" data-target="map">Maximize</button></div>
+          <div class="map-toolbar">
+            <button class="btn btn-secondary map-max" data-target="map">Maximize</button>
+            <button class="btn btn-secondary heatmap-toggle" data-target="map" data-heatmap="home">Show Heatmap</button>
+          </div>
           <div id="map" aria-label="Safety incidents map"></div>
-          <p class="hint">Tip: Click on the map to fill latitude and longitude automatically.</p>
+          <p class="hint">Tip: Click on the map to fill latitude and longitude automatically. Use heatmap to see incident-prone areas.</p>
         </div>
-        
+
         <aside class="side-panel">
           <div class="card">
             <h2>Report an Incident</h2>
@@ -69,8 +76,9 @@
                 <textarea id="description" rows="3" placeholder="Add details (optional)"></textarea>
               </div>
               <div class="field">
-                <label for="photo">Photo (optional)</label>
-                <div id="uploadArea" class="upload-area" tabindex="0" role="button" aria-label="Upload a photo by clicking, dropping, or pasting">
+                <label for="photo">Photo (Required)</label>
+                <div id="uploadArea" class="upload-area" tabindex="0" role="button"
+                  aria-label="Upload a photo by clicking, dropping, or pasting">
                   <div class="upload-instructions">
                     <div class="upload-icon" aria-hidden="true">📷</div>
                     <div>
@@ -111,16 +119,19 @@
         </aside>
       </section>
     </div>
-    
+
     <!-- Recent Incidents View: Map + Incidents List -->
     <div id="incidentsPanel" class="view-panel">
       <section class="layout">
         <div class="map-panel">
-          <div class="map-toolbar"><button class="btn btn-secondary map-max" data-target="map2">Maximize</button></div>
+          <div class="map-toolbar">
+            <button class="btn btn-secondary map-max" data-target="map2">Maximize</button>
+            <button class="btn btn-secondary heatmap-toggle" data-target="map2" data-heatmap="incidents">Show Heatmap</button>
+          </div>
           <div id="map2" aria-label="Safety incidents map"></div>
-          <p class="hint">Tip: Click on the map to fill latitude and longitude automatically.</p>
+          <p class="hint">Tip: Click on the map to fill latitude and longitude automatically. Use heatmap to see incident-prone areas.</p>
         </div>
-        
+
         <aside class="side-panel">
           <div class="card">
             <h2>Recent Incidents</h2>
@@ -129,7 +140,7 @@
         </aside>
       </section>
     </div>
-    
+
     <!-- Analytics View: Analytics Dashboard Only -->
     <div id="analyticsPanel" class="view-panel">
       <div class="analytics-container">
@@ -139,7 +150,7 @@
             <button class="tab-btn active" data-tab="types">Incident Types</button>
             <button class="tab-btn" data-tab="areas">Area Trends</button>
           </div>
-          
+
           <div id="typesTab" class="tab-content active">
             <div class="stats-grid">
               <div class="stat-card">
@@ -153,7 +164,7 @@
             </div>
             <div class="type-chart" id="typeChart"></div>
           </div>
-          
+
           <div id="areasTab" class="tab-content">
             <div class="stats-grid">
               <div class="stat-card">
@@ -185,9 +196,11 @@
     </div>
   </footer>
 
-  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-  <script src="script.js"></script>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" defer></script>
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet.heat.js" defer></script>
+  <script src="script.js" defer></script> ```
 </body>
+
 </html>
