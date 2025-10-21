@@ -49,9 +49,10 @@
           <div class="map-toolbar">
             <button class="btn btn-secondary map-max" data-target="map">Maximize</button>
             <button class="btn btn-secondary heatmap-toggle" data-target="map" data-heatmap="home">Show Heatmap</button>
+            <button class="btn btn-secondary heatmap-info" title="Show heatmap guide">?</button>
           </div>
           <div id="map" aria-label="Safety incidents map"></div>
-          <p class="hint">Tip: Click on the map to fill latitude and longitude automatically. Use heatmap to see incident-prone areas.</p>
+          <p class="hint">Tip: Click on the map to fill latitude and longitude automatically. Use heatmap to see incident-prone areas - red zones indicate high-risk areas with recent or severe incidents.</p>
         </div>
 
         <aside class="side-panel">
@@ -126,10 +127,12 @@
         <div class="map-panel">
           <div class="map-toolbar">
             <button class="btn btn-secondary map-max" data-target="map2">Maximize</button>
-            <button class="btn btn-secondary heatmap-toggle" data-target="map2" data-heatmap="incidents">Show Heatmap</button>
+            <button class="btn btn-secondary heatmap-toggle" data-target="map2" data-heatmap="incidents">Show
+              Heatmap</button>
+            <button class="btn btn-secondary heatmap-info" title="Show heatmap guide">?</button>
           </div>
           <div id="map2" aria-label="Safety incidents map"></div>
-          <p class="hint">Tip: Click on the map to fill latitude and longitude automatically. Use heatmap to see incident-prone areas.</p>
+          <p class="hint">Tip: Click on the map to fill latitude and longitude automatically. Use heatmap to see incident-prone areas - red zones indicate high-risk areas with recent or severe incidents.</p>
         </div>
 
         <aside class="side-panel">
@@ -190,6 +193,61 @@
   <!-- Toasts -->
   <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
+  <!-- Heatmap Guide -->
+  <div id="heatmapGuideOverlay" class="heatmap-guide-overlay" style="display: none;"></div>
+  <div id="heatmapGuide" class="heatmap-guide" style="display: none;">
+    <div class="guide-header">
+      <h3>🛡️ Incident Heatmap Guide</h3>
+      <button id="closeGuide" class="close-btn" aria-label="Close guide">&times;</button>
+    </div>
+    <div class="guide-content">
+      <p class="guide-intro">The heatmap shows incident-prone areas based on severity, frequency, and recency of incidents.</p>
+      
+      <div class="guide-legend">
+        <h4>Risk Level Colors:</h4>
+        <div class="legend-item">
+          <div class="legend-color low-risk"></div>
+          <span>Low Risk - Few incidents, older events</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color moderate-risk"></div>
+          <span>Moderate Risk - Some recent incidents</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color elevated-risk"></div>
+          <span>Elevated Risk - Multiple incidents in area</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color high-risk"></div>
+          <span>High Risk - Recent severe incidents</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color very-high-risk"></div>
+          <span>Very High Risk - Multiple recent severe incidents</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color critical-risk"></div>
+          <span>Critical Risk - Avoid these areas</span>
+        </div>
+      </div>
+
+      <div class="guide-tips">
+        <h4>💡 Safety Tips:</h4>
+        <ul>
+          <li><strong>Red zones:</strong> Avoid if possible, especially at night</li>
+          <li><strong>Yellow/Orange zones:</strong> Exercise caution, stay alert</li>
+          <li><strong>Blue zones:</strong> Generally safer, but remain aware</li>
+          <li><strong>Recent incidents:</strong> Appear brighter on the heatmap</li>
+          <li><strong>Severe incidents:</strong> Crime, Fire, and Earthquakes have higher impact</li>
+        </ul>
+      </div>
+
+      <div class="guide-footer">
+        <p><em>Heatmap updates in real-time as new incidents are reported.</em></p>
+      </div>
+    </div>
+  </div>
+
   <footer class="site-footer">
     <div class="container">
       <p>© <span id="year"></span> Urban Guardian. Stay aware. Stay safe.</p>
@@ -199,8 +257,8 @@
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" defer></script>
-  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet.heat.js" defer></script>
-  <script src="script.js" defer></script> ```
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js" defer></script>
+  <script src="script.js" defer></script>
 </body>
 
 </html>
