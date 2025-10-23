@@ -1,13 +1,13 @@
 // server.js
 const express = require('express');
 const cors = require('cors');
-const mysql = require('mysql2/promise'); // Use the promise-based version
+const mysql = require('mysql2/promise');
 const path = require('path');
 const http = require('http');
 const { Server } = require("socket.io");
 
 const app = express();
-const server = http.createServer(app); // Create an HTTP server for Socket.IO
+const server = http.createServer(app);
 const PORT = 5000;
 
 // Middleware
@@ -19,24 +19,24 @@ app.use(express.static(path.join(__dirname, 'public')));
 // --- Socket.IO Setup ---
 const io = new Server(server, {
   cors: {
-    origin: "*", // Allow all origins for simplicity in development
-    methods: ["GET", "POST"]
+    origin: "*",
+    methods: ["GET", "POST", "DELETE"]
   }
 });
 
 io.on('connection', (socket) => {
   console.log('🔌 A user connected');
   socket.on('disconnect', () => {
-    console.log(' disconnected');
+    console.log('❌ User disconnected');
   });
 });
 
-// --- MySQL Connection Pool (Better for Web Servers) ---
+// --- MySQL Connection Pool ---
 const db = mysql.createPool({
   connectionLimit: 10,
   host: 'localhost',
   user: 'root',
-  password: 'DJdjdj12', // Your MySQL password
+  password: 'DJdjdj12',
   database: 'urban_guardian'
 });
 
@@ -53,16 +53,16 @@ db.getConnection()
 
 // --- Routes ---
 
-// POST: Add a new incident (Corrected for base64 image and Socket.IO)
+// POST: Add a new incident
 app.post('/api/incidents', async (req, res) => {
-  const { type, description, lat, lng, image } = req.body; // Image comes from body
+  const { type, description, lat, lng, image } = req.body;
 
   if (!type || lat == null || lng == null || !image) {
-    return res.status(400).json({ error: 'Missing required fields: type, lat, lng, Image' });
+    return res.status(400).json({ error: 'Missing required fields: type, lat, lng, image' });
   }
 
   const sql = `INSERT INTO incidents (type, description, lat, lng, image) VALUES (?, ?, ?, ?, ?)`;
-
+  
   try {
     const [result] = await db.query(sql, [type, description, lat, lng, image]);
     const newIncidentId = result.insertId;
@@ -73,9 +73,9 @@ app.post('/api/incidents', async (req, res) => {
 
     if (newIncident) {
       console.log('📢 Broadcasting new incident:', newIncident.id);
-      io.emit('new-incident', newIncident); // Broadcast to all clients
+      io.emit('new-incident', newIncident);
     }
-
+    
     res.status(201).json(newIncident);
   } catch (err) {
     console.error('❌ Error inserting incident:', err);
@@ -83,10 +83,9 @@ app.post('/api/incidents', async (req, res) => {
   }
 });
 
-
 // GET: Fetch all incidents
 app.get('/api/incidents', async (req, res) => {
-  const sql = `SELECT id, type, description, lat, lng, timestamp, image FROM incidents ORDER BY timestamp DESC`;
+  const sql = `SELECT id, type, description, lat, lng, timestamp, image, status FROM incidents ORDER BY timestamp DESC`;
   try {
     const [rows] = await db.query(sql);
     res.json(rows);
@@ -95,7 +94,6 @@ app.get('/api/incidents', async (req, res) => {
     return res.status(500).json({ error: 'Database fetch failed' });
   }
 });
-
 
 // GET: Serve single incident by ID
 app.get('/api/incidents/:id', async (req, res) => {
@@ -110,19 +108,28 @@ app.get('/api/incidents/:id', async (req, res) => {
   }
 });
 
-
 // DELETE: Remove an incident
 app.delete('/api/incidents/:id', async (req, res) => {
+  const incidentId = req.params.id;
   const sql = `DELETE FROM incidents WHERE id = ?`;
+  
   try {
-    await db.query(sql, [req.params.id]);
-    res.json({ message: '🗑️ Incident deleted successfully' });
+    const [result] = await db.query(sql, [incidentId]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Incident not found' });
+    }
+    
+    // Broadcast deletion to all connected clients
+    console.log('🗑️ Broadcasting incident deletion:', incidentId);
+    io.emit('incident-deleted', { id: parseInt(incidentId) });
+    
+    res.json({ message: '🗑️ Incident deleted successfully', id: parseInt(incidentId) });
   } catch (err) {
     console.error('❌ Error deleting incident:', err);
     return res.status(500).json({ error: 'Database delete failed' });
   }
 });
-
 
 // GET: Fetch updates for a specific incident
 app.get('/api/incidents/:id/updates', async (req, res) => {
@@ -140,7 +147,7 @@ app.get('/api/incidents/:id/updates', async (req, res) => {
 app.post('/api/incidents/:id/updates', async (req, res) => {
   const { id } = req.params;
   const { status, update_text } = req.body;
-
+  
   if (!status || !update_text) {
     return res.status(400).json({ error: 'Status and update text are required' });
   }
@@ -149,32 +156,32 @@ app.post('/api/incidents/:id/updates', async (req, res) => {
     // Insert the update
     const insertSql = `INSERT INTO incident_updates (incident_id, status, update_text) VALUES (?, ?, ?)`;
     await db.query(insertSql, [id, status, update_text]);
-
+    
     // Update the main incident status
     const updateIncidentSql = `UPDATE incidents SET status = ? WHERE id = ?`;
     await db.query(updateIncidentSql, [status, id]);
-
+    
     // Get the updated incident with all updates
     const [incident] = await db.query('SELECT * FROM incidents WHERE id = ?', [id]);
     const [updates] = await db.query('SELECT * FROM incident_updates WHERE incident_id = ? ORDER BY timestamp DESC', [id]);
-
+    
     // Broadcast to all connected clients
-    io.emit('incident-updated', {
-      incident: incident[0],
-      updates: updates
+    console.log('📢 Broadcasting incident update:', id);
+    io.emit('incident-updated', { 
+      incident: incident[0], 
+      updates: updates 
     });
-
-    res.json({
-      success: true,
-      incident: incident[0],
-      updates: updates
+    
+    res.json({ 
+      success: true, 
+      incident: incident[0], 
+      updates: updates 
     });
   } catch (err) {
     console.error('❌ Error adding update:', err);
     res.status(500).json({ error: 'Failed to add update' });
   }
 });
-
 
 // GET: Analytics for incident types
 app.get('/api/analytics/types', async (req, res) => {
@@ -189,7 +196,7 @@ app.get('/api/analytics/types', async (req, res) => {
 
     const [totalResult] = await db.query(totalQuery);
     const [typesResult] = await db.query(typesQuery);
-
+    
     const total = totalResult[0].total;
     const typesWithPercentage = typesResult.map(t => ({
       ...t,
@@ -207,31 +214,30 @@ app.get('/api/analytics/types', async (req, res) => {
   }
 });
 
-
 // GET: Analytics for area trends and hotspots
 app.get('/api/analytics/areas', async (req, res) => {
   try {
     const trendsQuery = `
-        SELECT
-            (SELECT COUNT(*) FROM incidents WHERE timestamp >= NOW() - INTERVAL 1 DAY) as recent24h,
-            (SELECT COUNT(*) FROM incidents WHERE timestamp >= NOW() - INTERVAL 7 DAY) as recent7d
+      SELECT
+        (SELECT COUNT(*) FROM incidents WHERE timestamp >= NOW() - INTERVAL 1 DAY) as recent24h,
+        (SELECT COUNT(*) FROM incidents WHERE timestamp >= NOW() - INTERVAL 7 DAY) as recent7d
     `;
     const hotspotsQuery = `
-        SELECT 
-            ROUND(lat, 2) as lat_group, 
-            ROUND(lng, 2) as lng_group, 
-            COUNT(*) as count,
-            (SELECT type FROM incidents WHERE ROUND(lat, 2) = lat_group AND ROUND(lng, 2) = lng_group GROUP BY type ORDER BY COUNT(*) DESC LIMIT 1) as mostCommonType
-        FROM incidents
-        GROUP BY lat_group, lng_group
-        HAVING count > 1
-        ORDER BY count DESC
-        LIMIT 5
+      SELECT 
+        ROUND(lat, 2) as lat_group, 
+        ROUND(lng, 2) as lng_group, 
+        COUNT(*) as count,
+        (SELECT type FROM incidents WHERE ROUND(lat, 2) = lat_group AND ROUND(lng, 2) = lng_group GROUP BY type ORDER BY COUNT(*) DESC LIMIT 1) as mostCommonType
+      FROM incidents
+      GROUP BY lat_group, lng_group
+      HAVING count > 1
+      ORDER BY count DESC
+      LIMIT 5
     `;
 
     const [trendsResult] = await db.query(trendsQuery);
     const [hotspotsResult] = await db.query(hotspotsQuery);
-
+    
     const hotspots = hotspotsResult.map(h => ({
       count: h.count,
       mostCommonType: h.mostCommonType,
@@ -248,6 +254,5 @@ app.get('/api/analytics/areas', async (req, res) => {
   }
 });
 
-
-// Start server using the http server instance for Socket.IO
+// Start server
 server.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));

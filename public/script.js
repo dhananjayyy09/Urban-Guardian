@@ -3,6 +3,8 @@ let map, map2;
 let homeCluster, incidentsCluster;
 let homeHeatmap, incidentsHeatmap;
 let allIncidents = [];
+let myDeletionId = null;  // Track your own deletions
+let myUpdateId = null;    // Track your own updates
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -223,9 +225,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Real-time updates
-  socket.on("new-incident", (incident) => {
+  socket.on('new-incident', async (incident) => {
     allIncidents.unshift(incident);
-    addIncidentToMap(incident);
+    await addIncidentToMap(incident);  // 🔧 ADD await
     addIncidentToList(incident, true);
     maybeNotifyForIncident(incident);
 
@@ -233,26 +235,94 @@ document.addEventListener('DOMContentLoaded', () => {
     updateHeatmap(map2, incidentsHeatmap, allIncidents);
   });
 
-  // 📍 NEW: Socket listener for incident updates
+  // NEW Socket listener for incident updates
+  // Socket listener for incident updates
   socket.on('incident-updated', async (data) => {
     console.log('Incident updated:', data);
 
+    // 🔧 Skip if this was YOUR update
+    if (myUpdateId === data.incident.id) {
+      console.log('⏭️ Skipping own update - ID:', myUpdateId);
+
+      // Clear clusters and re-add everything (just once)
+      if (homeCluster) homeCluster.clearLayers();
+      if (incidentsCluster) incidentsCluster.clearLayers();
+
+      for (const inc of allIncidents) {
+        await addIncidentToMap(inc);
+      }
+
+      updateHeatmap(map, homeHeatmap, allIncidents);
+      updateHeatmap(map2, incidentsHeatmap, allIncidents);
+
+      myUpdateId = null; // Reset after handling
+      return;
+    }
+
+    // This runs only for OTHER users' updates
     const index = allIncidents.findIndex(i => i.id === data.incident.id);
     if (index !== -1) {
       allIncidents[index] = data.incident;
     }
 
-    // Refresh markers
+    // Clear and refresh markers
     if (homeCluster) homeCluster.clearLayers();
     if (incidentsCluster) incidentsCluster.clearLayers();
 
-    await Promise.all(allIncidents.map(inc => addIncidentToMap(inc)));
+    for (const inc of allIncidents) {
+      await addIncidentToMap(inc);
+    }
 
     updateHeatmap(map, homeHeatmap, allIncidents);
     updateHeatmap(map2, incidentsHeatmap, allIncidents);
 
     showToast('Incident Updated', `${data.incident.type} status: ${data.incident.status}`);
   });
+
+  // Real-time deletion updates
+  socket.on('incident-deleted', async (data) => {
+    console.log('Incident deleted:', data.id);
+
+    const index = allIncidents.findIndex(i => i.id === data.id);
+    if (index !== -1) {
+      const deletedIncident = allIncidents[index];
+      allIncidents.splice(index, 1);
+
+      // 🔧 FIX: Clear layers, then add sequentially
+      if (homeCluster) homeCluster.clearLayers();
+      if (incidentsCluster) incidentsCluster.clearLayers();
+
+      // ✅ Process one at a time to prevent duplicates
+      for (const inc of allIncidents) {
+        await addIncidentToMap(inc);
+      }
+
+      updateHeatmap(map, homeHeatmap, allIncidents);
+      updateHeatmap(map2, incidentsHeatmap, allIncidents);
+
+      // Remove from incident list
+      const incidentList = document.getElementById('incidentList');
+      if (incidentList) {
+        const listItems = Array.from(incidentList.children);
+        listItems.forEach(item => {
+          const metaDiv = item.querySelector('.meta');
+          if (metaDiv) {
+            const hasIncident = allIncidents.some(inc => {
+              const coordText = `${inc.lat.toFixed(4)}, ${inc.lng.toFixed(4)}`;
+              return metaDiv.textContent.includes(coordText);
+            });
+
+            if (!hasIncident && metaDiv.textContent) {
+              item.remove();
+            }
+          }
+        });
+      }
+
+      showToast('Incident Removed', `${deletedIncident.type} was deleted`);
+    }
+  });
+
 
   // Geolocate
   locateMeBtn?.addEventListener("click", () => {
@@ -604,6 +674,10 @@ document.addEventListener('DOMContentLoaded', () => {
     <button class="btn btn-primary" style="width: 100%; margin-top: 10px; font-size: 11px; padding: 6px;"
             onclick="openIncidentDetail(${incident.id})">
       View Details & Add Update
+    </button>
+    <button class="btn btn-secondary delete-incident-btn" style="width: 100%; font-size: 11px; padding: 6px;"
+            onclick="confirmDeleteIncident(${incident.id})">
+      🗑️ Delete Incident
     </button></div>
   `;
 
@@ -640,6 +714,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <h4>Update Timeline</h4>
             <div id="updatesList"></div>
           </div>
+
+          <button class="btn btn-secondary delete-incident-btn" style="width: 100%;"
+                  onclick="confirmDeleteIncident(${incidentId})">
+            🗑️ Delete This Incident
+          </button>
           
           <div class="add-update-form">
             <h4>Add an Update</h4>
@@ -703,6 +782,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const update_text = document.getElementById('updateText').value;
 
     try {
+      // 🔧 Set tracking variable BEFORE the request
+      myUpdateId = incidentId;
+
       const response = await fetch(`/api/incidents/${incidentId}/updates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -712,23 +794,28 @@ document.addEventListener('DOMContentLoaded', () => {
       if (response.ok) {
         showToast('Update Posted', 'Update added successfully');
         document.getElementById('addUpdateForm').reset();
+
+        // Reload the updates in the modal
         loadIncidentUpdates(incidentId);
 
-        // Refresh incidents
-        const res = await fetch('/api/incidents');
-        const incidents = await res.json();
-        allIncidents = incidents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        // 🔧 DON'T refresh the entire map here!
+        // The socket listener will handle it (but skip for your own update)
 
-        // Refresh maps
-        if (homeCluster) homeCluster.clearLayers();
-        if (incidentsCluster) incidentsCluster.clearLayers();
-        await Promise.all(allIncidents.map(inc => addIncidentToMap(inc)));
-        updateHeatmap(map, homeHeatmap, allIncidents);
-        updateHeatmap(map2, incidentsHeatmap, allIncidents);
+        // Just update the specific incident in memory
+        const res = await fetch(`/api/incidents/${incidentId}`);
+        const updatedIncident = await res.json();
+
+        const index = allIncidents.findIndex(i => i.id === incidentId);
+        if (index !== -1) {
+          allIncidents[index] = updatedIncident;
+        }
+
       } else {
+        myUpdateId = null; // Reset on error
         showToast('Error', 'Failed to post update');
       }
     } catch (err) {
+      myUpdateId = null; // Reset on error
       console.error('Error posting update:', err);
       showToast('Error', 'Failed to post update');
     }
@@ -1128,4 +1215,70 @@ document.addEventListener('DOMContentLoaded', () => {
     if ([1273, 1276, 1279, 1282].includes(code)) return 202;
     return 800;
   }
+
+  window.confirmDeleteIncident = function (incidentId) {
+    const incident = allIncidents.find(i => i.id === incidentId);
+    if (!incident) return;
+
+    // Create confirmation dialog
+    const confirmHTML = `
+    <div id="deleteConfirmModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 3000; display: flex; align-items: center; justify-content: center; padding: 20px;">
+      <div class="delete-confirm-dialog">
+        <h3>⚠️ Delete Incident?</h3>
+        <p>Are you sure you want to permanently delete this <strong>${incident.type}</strong> incident?</p>
+        <p style="font-size: 12px; color: var(--muted);">This action cannot be undone.</p>
+        
+        <div class="delete-confirm-actions">
+          <button class="btn btn-secondary" onclick="closeDeleteConfirm()">Cancel</button>
+          <button class="btn delete-incident-btn" onclick="deleteIncident(${incidentId})" style="margin: 0;">
+            Yes, Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+    document.body.insertAdjacentHTML('beforeend', confirmHTML);
+  };
+
+  window.closeDeleteConfirm = function () {
+    const modal = document.getElementById('deleteConfirmModal');
+    if (modal) modal.remove();
+  };
+
+  window.deleteIncident = async function (incidentId) {
+    try {
+      const response = await fetch(`/api/incidents/${incidentId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        closeDeleteConfirm();
+        closeIncidentModal();
+
+        // Remove from allIncidents array
+        const index = allIncidents.findIndex(i => i.id === incidentId);
+        if (index !== -1) {
+          allIncidents.splice(index, 1);
+        }
+
+        // 🔧 DON'T refresh markers here - let the socket listener handle it
+        // The socket listener will receive 'incident-deleted' and do the refresh
+
+        // Remove from incident list immediately (for better UX)
+        const listItem = document.querySelector(`#incidentList li[data-incident-id="${incidentId}"]`);
+        if (listItem) {
+          listItem.remove();
+        }
+
+        showToast('Incident Deleted', 'The incident has been removed');
+      } else {
+        showToast('Error', 'Failed to delete incident');
+      }
+    } catch (err) {
+      console.error('Error deleting incident:', err);
+      showToast('Error', 'Network error');
+    }
+  };
+
 });
