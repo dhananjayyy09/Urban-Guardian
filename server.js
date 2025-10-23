@@ -58,11 +58,11 @@ app.post('/api/incidents', async (req, res) => {
   const { type, description, lat, lng, image } = req.body; // Image comes from body
 
   if (!type || lat == null || lng == null || !image) {
-      return res.status(400).json({ error: 'Missing required fields: type, lat, lng, Image' });
+    return res.status(400).json({ error: 'Missing required fields: type, lat, lng, Image' });
   }
 
   const sql = `INSERT INTO incidents (type, description, lat, lng, image) VALUES (?, ?, ?, ?, ?)`;
-  
+
   try {
     const [result] = await db.query(sql, [type, description, lat, lng, image]);
     const newIncidentId = result.insertId;
@@ -75,7 +75,7 @@ app.post('/api/incidents', async (req, res) => {
       console.log('📢 Broadcasting new incident:', newIncident.id);
       io.emit('new-incident', newIncident); // Broadcast to all clients
     }
-    
+
     res.status(201).json(newIncident);
   } catch (err) {
     console.error('❌ Error inserting incident:', err);
@@ -123,6 +123,59 @@ app.delete('/api/incidents/:id', async (req, res) => {
   }
 });
 
+
+// GET: Fetch updates for a specific incident
+app.get('/api/incidents/:id/updates', async (req, res) => {
+  const sql = `SELECT * FROM incident_updates WHERE incident_id = ? ORDER BY timestamp DESC`;
+  try {
+    const [updates] = await db.query(sql, [req.params.id]);
+    res.json(updates);
+  } catch (err) {
+    console.error('❌ Error fetching updates:', err);
+    res.status(500).json({ error: 'Failed to fetch updates' });
+  }
+});
+
+// POST: Add an update to an incident
+app.post('/api/incidents/:id/updates', async (req, res) => {
+  const { id } = req.params;
+  const { status, update_text } = req.body;
+
+  if (!status || !update_text) {
+    return res.status(400).json({ error: 'Status and update text are required' });
+  }
+
+  try {
+    // Insert the update
+    const insertSql = `INSERT INTO incident_updates (incident_id, status, update_text) VALUES (?, ?, ?)`;
+    await db.query(insertSql, [id, status, update_text]);
+
+    // Update the main incident status
+    const updateIncidentSql = `UPDATE incidents SET status = ? WHERE id = ?`;
+    await db.query(updateIncidentSql, [status, id]);
+
+    // Get the updated incident with all updates
+    const [incident] = await db.query('SELECT * FROM incidents WHERE id = ?', [id]);
+    const [updates] = await db.query('SELECT * FROM incident_updates WHERE incident_id = ? ORDER BY timestamp DESC', [id]);
+
+    // Broadcast to all connected clients
+    io.emit('incident-updated', {
+      incident: incident[0],
+      updates: updates
+    });
+
+    res.json({
+      success: true,
+      incident: incident[0],
+      updates: updates
+    });
+  } catch (err) {
+    console.error('❌ Error adding update:', err);
+    res.status(500).json({ error: 'Failed to add update' });
+  }
+});
+
+
 // GET: Analytics for incident types
 app.get('/api/analytics/types', async (req, res) => {
   try {
@@ -136,7 +189,7 @@ app.get('/api/analytics/types', async (req, res) => {
 
     const [totalResult] = await db.query(totalQuery);
     const [typesResult] = await db.query(typesQuery);
-    
+
     const total = totalResult[0].total;
     const typesWithPercentage = typesResult.map(t => ({
       ...t,
@@ -178,16 +231,16 @@ app.get('/api/analytics/areas', async (req, res) => {
 
     const [trendsResult] = await db.query(trendsQuery);
     const [hotspotsResult] = await db.query(hotspotsQuery);
-    
+
     const hotspots = hotspotsResult.map(h => ({
-        count: h.count,
-        mostCommonType: h.mostCommonType,
-        center: { lat: parseFloat(h.lat_group), lng: parseFloat(h.lng_group) }
+      count: h.count,
+      mostCommonType: h.mostCommonType,
+      center: { lat: parseFloat(h.lat_group), lng: parseFloat(h.lng_group) }
     }));
 
     res.json({
-        trends: trendsResult[0],
-        hotspots: hotspots
+      trends: trendsResult[0],
+      hotspots: hotspots
     });
   } catch (err) {
     console.error('❌ Error fetching area analytics:', err);

@@ -190,16 +190,22 @@ main {
   flex-direction: column;
 }
 
-.fullscreen .map-toolbar .map-max {
+/* Map toolbar buttons */
+.map-toolbar .map-min {
   display: none;
 }
 
-.fullscreen .map-toolbar .map-min {
+.map-toolbar .map-max {
   display: inline-flex;
 }
 
-.map-toolbar .map-min {
-  display: none;
+/* When in fullscreen mode */
+.fullscreen .map-toolbar .map-max {
+  display: none !important;
+}
+
+.fullscreen .map-toolbar .map-min {
+  display: inline-flex !important;
 }
 
 /* Heatmap toggle buttons inherit default button styling */
@@ -1034,4 +1040,148 @@ textarea::placeholder {
 .heatmap-info:hover {
   background: var(--primary-600) !important;
   transform: scale(1.05);
+}
+
+/* 📍 ADD TO THE END OF style.css */
+
+/* Incident Status Badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.status-reported {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+}
+
+.status-verified {
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  color: #c084fc;
+}
+
+.status-responding {
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid rgba(234, 179, 8, 0.4);
+  color: #fde047;
+}
+
+.status-resolved {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #4ade80;
+}
+
+.status-false_alarm {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+
+/* Update Timeline */
+.updates-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.updates-section h4 {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 8px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.update-item {
+  background: var(--elev);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-left: 3px solid var(--primary);
+}
+
+.update-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.update-time {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.update-text {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+/* Add Update Form */
+.add-update-form {
+  background: var(--elev);
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.add-update-form h4 {
+  font-size: 13px;
+  margin: 0 0 10px 0;
+  color: var(--text);
+}
+
+.add-update-form select,
+.add-update-form textarea {
+  margin-bottom: 8px;
+}
+
+.add-update-form .btn {
+  width: 100%;
+  font-size: 12px;
+  padding: 8px 12px;
+}
+
+/* Popup updates styling */
+.popup-updates {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 10px;
+}
+
+.popup-update {
+  background: rgba(18, 26, 38, 0.6);
+  padding: 6px 8px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+
+.popup-update-status {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.popup-update-text {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.popup-update-time {
+  font-size: 9px;
+  color: var(--muted);
+  opacity: 0.7;
+  margin-top: 2px;
 }

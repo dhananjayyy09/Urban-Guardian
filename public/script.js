@@ -22,23 +22,23 @@ document.addEventListener('DOMContentLoaded', () => {
         map.addLayer(homeCluster);
       }
 
-      // Initialize heatmap for home map - optimized for incident-prone areas
+      // Initialize heatmap for home map
       if (!homeHeatmap && window.L && L.heatLayer) {
         homeHeatmap = L.heatLayer([], {
-          radius: 30,           // Larger radius to show broader areas
-          blur: 20,             // More blur for smoother visualization
-          maxZoom: 16,          // Show heatmap at higher zoom levels
+          radius: 30,
+          blur: 20,
+          maxZoom: 16,
           max: 1.0,
           gradient: {
-            0.1: 'rgba(0, 100, 255, 0.3)',     // Light blue for low risk
-            0.3: 'rgba(0, 255, 255, 0.5)',     // Cyan for moderate risk
-            0.5: 'rgba(0, 255, 0, 0.7)',       // Green for elevated risk
-            0.7: 'rgba(255, 255, 0, 0.8)',     // Yellow for high risk
-            0.9: 'rgba(255, 165, 0, 0.9)',     // Orange for very high risk
-            1.0: 'rgba(255, 0, 0, 1.0)'        // Red for critical risk areas
+            0.1: 'rgba(0, 100, 255, 0.3)',
+            0.3: 'rgba(0, 255, 255, 0.5)',
+            0.5: 'rgba(0, 255, 0, 0.7)',
+            0.7: 'rgba(255, 255, 0, 0.8)',
+            0.9: 'rgba(255, 165, 0, 0.9)',
+            1.0: 'rgba(255, 0, 0, 1.0)'
           }
         });
-        console.log('Home heatmap layer created for incident-prone areas');
+        console.log('Home heatmap layer created');
       }
 
       map.on("click", (e) => {
@@ -62,23 +62,23 @@ document.addEventListener('DOMContentLoaded', () => {
         map2.addLayer(incidentsCluster);
       }
 
-      // Initialize heatmap for incidents map - optimized for incident-prone areas
+      // Initialize heatmap for incidents map
       if (!incidentsHeatmap && window.L && L.heatLayer) {
         incidentsHeatmap = L.heatLayer([], {
-          radius: 30,           // Larger radius to show broader areas
-          blur: 20,             // More blur for smoother visualization
-          maxZoom: 16,          // Show heatmap at higher zoom levels
+          radius: 30,
+          blur: 20,
+          maxZoom: 16,
           max: 1.0,
           gradient: {
-            0.1: 'rgba(0, 100, 255, 0.3)',     // Light blue for low risk
-            0.3: 'rgba(0, 255, 255, 0.5)',     // Cyan for moderate risk
-            0.5: 'rgba(0, 255, 0, 0.7)',       // Green for elevated risk
-            0.7: 'rgba(255, 255, 0, 0.8)',     // Yellow for high risk
-            0.9: 'rgba(255, 165, 0, 0.9)',     // Orange for very high risk
-            1.0: 'rgba(255, 0, 0, 1.0)'        // Red for critical risk areas
+            0.1: 'rgba(0, 100, 255, 0.3)',
+            0.3: 'rgba(0, 255, 255, 0.5)',
+            0.5: 'rgba(0, 255, 0, 0.7)',
+            0.7: 'rgba(255, 255, 0, 0.8)',
+            0.9: 'rgba(255, 165, 0, 0.9)',
+            1.0: 'rgba(255, 0, 0, 1.0)'
           }
         });
-        console.log('Incidents heatmap layer created for incident-prone areas');
+        console.log('Incidents heatmap layer created');
       }
     }
   }
@@ -92,6 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const locateMeBtn = document.getElementById("locateMe");
   const enableAlertsBtn = document.getElementById('enableAlerts');
   const mapMaxButtons = document.querySelectorAll('.map-max');
+  const mapMinButtons = document.querySelectorAll('.map-min');
   const photoInput = document.getElementById("photo");
   const photoPreview = document.getElementById("photoPreview");
   const photoMeta = document.getElementById('photoMeta');
@@ -109,36 +110,27 @@ document.addEventListener('DOMContentLoaded', () => {
   const heatmapGuideOverlay = document.getElementById('heatmapGuideOverlay');
   const closeGuideBtn = document.getElementById('closeGuide');
 
-  // --- Corrected Page Load Logic ---
-  // 1. Initialize the empty map containers first.
+  // Initialize maps first
   console.log('Page loaded, initializing map containers...');
   initializeMaps();
 
-  // 2. NOW, fetch the data and populate everything.
+  // Fetch incidents and populate
   fetch("/api/incidents")
-    .then(res => {
-      if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
-      }
+    .then(async res => {
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       return res.json();
     })
-    .then((incidents) => {
-      // Sort incidents by timestamp (most recent first)
+    .then(async (incidents) => {
       incidents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-      // Store for later use
       allIncidents = incidents;
-
       console.log(`Loaded ${allIncidents.length} incidents.`);
 
-      // Populate the maps, list, and check for notifications
-      allIncidents.forEach((incident) => {
-        addIncidentToMap(incident);
+      await Promise.all(allIncidents.map(async incident => {
+        await addIncidentToMap(incident);
         addIncidentToList(incident);
         maybeNotifyForIncident(incident);
-      });
+      }));
 
-      // Initialize heatmaps with all incidents
       updateHeatmap(map, homeHeatmap, allIncidents);
       updateHeatmap(map2, incidentsHeatmap, allIncidents);
     })
@@ -147,12 +139,16 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast("Load Error", "Could not load incident data from the server.");
     });
 
-  // Fullscreen toggles for maps
+  // Fullscreen toggles
   mapMaxButtons.forEach(btn => {
     btn.addEventListener('click', () => toggleMapFullscreen(btn.dataset.target));
   });
 
-  // Heatmap toggle functionality
+  // 📍 ADD EVENT LISTENERS FOR MINIMIZE BUTTONS
+  mapMinButtons.forEach(btn => {
+    btn.addEventListener('click', () => toggleMapFullscreen(btn.dataset.target));
+  });
+  // Heatmap toggle
   const heatmapToggleButtons = document.querySelectorAll('.heatmap-toggle');
   const heatmapInfoButtons = document.querySelectorAll('.heatmap-info');
   let heatmapStates = { home: false, incidents: false };
@@ -162,10 +158,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const targetMap = btn.dataset.target;
       const heatmapType = btn.dataset.heatmap;
 
-      // Toggle heatmap state
       heatmapStates[heatmapType] = !heatmapStates[heatmapType];
 
-      // Get the appropriate map and heatmap layer
       let mapInstance, heatmapLayer;
       if (targetMap === 'map') {
         mapInstance = map;
@@ -175,101 +169,96 @@ document.addEventListener('DOMContentLoaded', () => {
         heatmapLayer = incidentsHeatmap;
       }
 
-      // Toggle heatmap visibility
       toggleHeatmap(mapInstance, heatmapLayer, heatmapStates[heatmapType]);
 
-      // Update button text and styling
       btn.textContent = heatmapStates[heatmapType] ? 'Hide Heatmap' : 'Show Heatmap';
       btn.classList.toggle('active', heatmapStates[heatmapType]);
 
-      // Show guide when enabling heatmap for the first time
       if (heatmapStates[heatmapType] && !localStorage.getItem('heatmapGuideShown')) {
         showHeatmapGuide();
         localStorage.setItem('heatmapGuideShown', 'true');
       }
 
-      // Show toast notification
       const action = heatmapStates[heatmapType] ? 'enabled' : 'disabled';
       showToast('Incident Heatmap ' + action, heatmapStates[heatmapType] ?
-        'Heatmap shows incident-prone areas: Blue=Low Risk, Yellow=High Risk, Red=Critical Areas. Recent and severe incidents appear brighter.' :
-        'Heatmap hidden. Individual incident markers are still visible.');
+        'Heatmap shows incident-prone areas: Blue=Low Risk, Yellow=High Risk, Red=Critical Areas.' :
+        'Heatmap hidden. Individual markers are still visible.');
     });
   });
 
-  // Heatmap info buttons
   heatmapInfoButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      showHeatmapGuide();
-    });
+    btn.addEventListener('click', () => showHeatmapGuide());
   });
 
+  // Update the toggleMapFullscreen function
   function toggleMapFullscreen(targetId) {
     const panel = document.getElementById(targetId)?.closest('.map-panel');
     if (!panel) return;
+
     const isFs = panel.classList.toggle('fullscreen');
-    // Replace toolbar button label
+
     const toolbar = panel.querySelector('.map-toolbar');
     if (toolbar) {
-      toolbar.innerHTML = '';
-      const button = document.createElement('button');
-      button.className = 'btn btn-secondary ' + (isFs ? 'map-min' : 'map-max');
-      button.dataset.target = targetId;
-      button.textContent = isFs ? 'Minimize' : 'Maximize';
-      button.addEventListener('click', () => toggleMapFullscreen(targetId));
-      toolbar.appendChild(button);
+      const maxBtn = toolbar.querySelector('.map-max');
+      const minBtn = toolbar.querySelector('.map-min');
+
+      if (maxBtn && minBtn) {
+        if (isFs) {
+          // Fullscreen: hide maximize, show minimize
+          maxBtn.style.display = 'none';
+          minBtn.style.display = 'inline-flex';
+        } else {
+          // Normal: show maximize, hide minimize
+          maxBtn.style.display = 'inline-flex';
+          minBtn.style.display = 'none';
+        }
+      }
     }
-    // Ensure Leaflet map resizes correctly
+
+    // Resize map after transition
     setTimeout(() => {
       if (targetId === 'map' && map) map.invalidateSize();
       if (targetId === 'map2' && map2) map2.invalidateSize();
     }, 200);
   }
 
-  // Debug: Check if map containers exist
-  setTimeout(() => {
-    console.log('Map containers check:');
-    console.log('map container:', document.getElementById('map'));
-    console.log('map2 container:', document.getElementById('map2'));
-    console.log('map2 container visible:', document.getElementById('map2')?.offsetParent !== null);
-    console.log('Leaflet heatLayer available:', typeof window.L !== 'undefined' && typeof window.L.heatLayer !== 'undefined');
-    console.log('Home heatmap layer:', homeHeatmap);
-    console.log('Incidents heatmap layer:', incidentsHeatmap);
-  }, 1000);
-
   // Real-time updates
   socket.on("new-incident", (incident) => {
-    allIncidents.unshift(incident); // Add to beginning of array
+    allIncidents.unshift(incident);
     addIncidentToMap(incident);
     addIncidentToList(incident, true);
     maybeNotifyForIncident(incident);
 
-    // Update heatmap layer directly if it exists
-    if (heatLayer) {
-        heatLayer.addLatLng([incident.lat, incident.lng, 1.0]); // Use 1.0 or calculate intensity if needed
+    updateHeatmap(map, homeHeatmap, allIncidents);
+    updateHeatmap(map2, incidentsHeatmap, allIncidents);
+  });
+
+  // 📍 NEW: Socket listener for incident updates
+  socket.on('incident-updated', async (data) => {
+    console.log('Incident updated:', data);
+
+    const index = allIncidents.findIndex(i => i.id === data.incident.id);
+    if (index !== -1) {
+      allIncidents[index] = data.incident;
     }
 
-    // Refresh analytics if analytics tab is currently visible
-    const activeNavTab = document.querySelector('.nav-tab-btn.active');
-    if (activeNavTab && activeNavTab.dataset.navTab === 'analytics') {
-      const activeAnalyticsTab = document.querySelector('.tab-btn.active');
-      if (activeAnalyticsTab) {
-        if (activeAnalyticsTab.dataset.tab === 'types') {
-          loadTypeAnalytics();
-        } else if (activeAnalyticsTab.dataset.tab === 'areas') {
-          loadAreaAnalytics();
-        }
-      }
-    }
-    if (areHotspotsVisible) {
-      toggleHotspotCircles().then(() => toggleHotspotCircles()); // Hide then show to refresh
-    }
+    // Refresh markers
+    if (homeCluster) homeCluster.clearLayers();
+    if (incidentsCluster) incidentsCluster.clearLayers();
+
+    await Promise.all(allIncidents.map(inc => addIncidentToMap(inc)));
+
+    updateHeatmap(map, homeHeatmap, allIncidents);
+    updateHeatmap(map2, incidentsHeatmap, allIncidents);
+
+    showToast('Incident Updated', `${data.incident.type} status: ${data.incident.status}`);
   });
 
   // Geolocate
   locateMeBtn?.addEventListener("click", () => {
-    if (!navigator.geolocation) { showToast('Location unavailable', 'Geolocation is not supported by your browser.'); return; }
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-      showToast('Secure context required', 'Enable HTTPS for precise location on mobile.');
+    if (!navigator.geolocation) {
+      showToast('Location unavailable', 'Geolocation not supported');
+      return;
     }
     locateMeBtn.disabled = true;
     getAccuratePosition({ attempts: 2, highAccuracy: true, timeout: 9000 })
@@ -281,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
       })
       .catch((err) => {
         console.error('Geolocation failed', err);
-        showToast('Location failed', 'Could not determine your location. Check permissions and GPS.');
+        showToast('Location failed', 'Could not determine location');
       })
       .finally(() => { locateMeBtn.disabled = false; });
   });
@@ -292,12 +281,12 @@ document.addEventListener('DOMContentLoaded', () => {
       let done = false;
       const tryOnce = (useHighAccuracy, to) => {
         navigator.geolocation.getCurrentPosition((pos) => {
-          if (done) return; done = true;
+          if (done) return;
+          done = true;
           resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
         }, (err) => {
           if (attempts > 0) {
             attempts -= 1;
-            // fallback to lower accuracy and extended timeout
             tryOnce(false, to + 4000);
           } else {
             reject(err);
@@ -308,31 +297,32 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // --- Proximity Alerts (2 km) ---
+  // Proximity alerts
   let alertsEnabled = false;
-  let userPosition = null; // { lat, lng }
+  let userPosition = null;
   let positionWatchId = null;
   const NOTIFY_RADIUS_KM = 2;
 
   enableAlertsBtn?.addEventListener('click', async () => {
     let permission = 'default';
     if ('Notification' in window) {
-      try { permission = await Notification.requestPermission(); } catch (_) { permission = 'default'; }
-    } else {
-      showToast('Notifications unavailable', 'Using in-app alerts instead.');
+      try {
+        permission = await Notification.requestPermission();
+      } catch (_) {
+        permission = 'default';
+      }
     }
 
-    alertsEnabled = true; // Always enable alerts; will fallback to toasts if no permission
+    alertsEnabled = true;
     enableAlertsBtn.textContent = 'Alerts Enabled';
     enableAlertsBtn.disabled = true;
 
     if (permission !== 'granted') {
-      showToast('Alerts enabled', 'System notifications blocked; showing in-app alerts.');
+      showToast('Alerts enabled', 'Using in-app alerts');
     } else {
-      showToast('Alerts enabled', 'You will receive nearby incident notifications.');
+      showToast('Alerts enabled', 'You will receive nearby notifications');
     }
 
-    // Start tracking location if not already
     if (navigator.geolocation && positionWatchId == null) {
       positionWatchId = navigator.geolocation.watchPosition((pos) => {
         userPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
@@ -341,7 +331,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }, { enableHighAccuracy: true, maximumAge: 15000, timeout: 8000 });
     }
 
-    console.log('Checking existing incidents for proximity alerts...');
     allIncidents.forEach(maybeNotifyForIncident);
   });
 
@@ -349,26 +338,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!alertsEnabled || !userPosition) return;
     const distanceKm = haversineKm(userPosition.lat, userPosition.lng, incident.lat, incident.lng);
     if (distanceKm <= NOTIFY_RADIUS_KM) {
-      try {
-        const title = `Nearby ${incident.type}`;
-        const body = `${(distanceKm).toFixed(1)} km away • ${new Date(incident.timestamp).toLocaleTimeString()}`;
-        const icon = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🛡️</text></svg>';
-        if (document.hasFocus() || Notification.permission !== 'granted') {
-          showToast(title, body);
-        } else {
-          new Notification(title, { body, icon });
-        }
-      } catch (e) {
-        // Fallback if Notification fails
-        console.warn('Notification failed, falling back to toast');
-        showToast(`Nearby ${incident.type}`, `${(distanceKm).toFixed(1)} km away`);
+      const title = `Nearby ${incident.type}`;
+      const body = `${distanceKm.toFixed(1)} km away`;
+      if (document.hasFocus() || Notification.permission !== 'granted') {
+        showToast(title, body);
+      } else {
+        new Notification(title, { body });
       }
     }
   }
 
   function haversineKm(lat1, lon1, lat2, lon2) {
     const toRad = (v) => v * Math.PI / 180;
-    const R = 6371; // Earth radius km
+    const R = 6371;
     const dLat = toRad(lat2 - lat1);
     const dLon = toRad(lon2 - lon1);
     const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
@@ -376,81 +358,49 @@ document.addEventListener('DOMContentLoaded', () => {
     return R * c;
   }
 
-  // Heatmap functionality - Enhanced to show incident-prone areas
+  // Heatmap functions
   function processIncidentsForHeatmap(incidents) {
-    const now = Date.now();
-    const oneDay = 24 * 60 * 60 * 1000;
-    const oneWeek = 7 * oneDay;
-    const oneMonth = 30 * oneDay;
-
-    // Group nearby incidents to create hotspot areas
     const hotspots = createIncidentHotspots(incidents);
-    
     return hotspots.map(hotspot => {
-      const { lat, lng, incidents: hotspotIncidents, totalIntensity } = hotspot;
-      
-      // Calculate intensity based on incident density and severity
-      let baseIntensity = Math.min(totalIntensity / 10, 1.0); // Normalize to 0-1
-      
-      // Boost intensity for high-risk incident types
-      const hasHighRisk = hotspotIncidents.some(incident => 
-        ['crime', 'fire', 'earthquake'].includes(incident.type.toLowerCase())
-      );
-      
-      if (hasHighRisk) {
-        baseIntensity = Math.min(baseIntensity * 1.5, 1.0);
-      }
-      
-      // Recent incidents get higher weight
-      const recentCount = hotspotIncidents.filter(incident => {
-        const age = now - new Date(incident.timestamp).getTime();
-        return age < oneWeek;
-      }).length;
-      
-      if (recentCount > 0) {
-        baseIntensity = Math.min(baseIntensity + (recentCount * 0.1), 1.0);
-      }
-
-      return [lat, lng, Math.max(baseIntensity, 0.1)]; // Minimum intensity for visibility
+      const { lat, lng, totalIntensity } = hotspot;
+      let baseIntensity = Math.min(totalIntensity / 10, 1.0);
+      return [lat, lng, Math.max(baseIntensity, 0.1)];
     });
   }
 
-  // Create hotspots by clustering nearby incidents
   function createIncidentHotspots(incidents, clusterRadius = 0.01) {
     const hotspots = [];
     const processed = new Set();
-    
+
     incidents.forEach((incident, index) => {
       if (processed.has(index)) return;
-      
+
       const cluster = [incident];
       processed.add(index);
-      
-      // Find nearby incidents within cluster radius
+
       incidents.forEach((otherIncident, otherIndex) => {
         if (processed.has(otherIndex)) return;
-        
+
         const distance = Math.sqrt(
-          Math.pow(incident.lat - otherIncident.lat, 2) + 
+          Math.pow(incident.lat - otherIncident.lat, 2) +
           Math.pow(incident.lng - otherIncident.lng, 2)
         );
-        
+
         if (distance <= clusterRadius) {
           cluster.push(otherIncident);
           processed.add(otherIndex);
         }
       });
-      
-      // Calculate cluster center and total intensity
+
       const centerLat = cluster.reduce((sum, inc) => sum + inc.lat, 0) / cluster.length;
       const centerLng = cluster.reduce((sum, inc) => sum + inc.lng, 0) / cluster.length;
-      
+
       const totalIntensity = cluster.reduce((sum, inc) => {
         const severity = getIncidentSeverity(inc.type);
         const timeWeight = getTimeWeight(inc.timestamp);
         return sum + (severity * timeWeight);
       }, 0);
-      
+
       hotspots.push({
         lat: centerLat,
         lng: centerLng,
@@ -459,11 +409,10 @@ document.addEventListener('DOMContentLoaded', () => {
         count: cluster.length
       });
     });
-    
+
     return hotspots;
   }
 
-  // Get incident severity score
   function getIncidentSeverity(type) {
     switch (type.toLowerCase()) {
       case 'earthquake': return 10;
@@ -476,14 +425,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Get time weight (recent incidents are more important)
   function getTimeWeight(timestamp) {
     const now = Date.now();
     const age = now - new Date(timestamp).getTime();
     const oneDay = 24 * 60 * 60 * 1000;
     const oneWeek = 7 * oneDay;
     const oneMonth = 30 * oneDay;
-    
+
     if (age < oneDay) return 1.0;
     if (age < oneWeek) return 0.8;
     if (age < oneMonth) return 0.6;
@@ -492,31 +440,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateHeatmap(mapInstance, heatmapLayer, incidents) {
     if (!mapInstance || !heatmapLayer) return;
-
     const heatmapData = processIncidentsForHeatmap(incidents);
     heatmapLayer.setLatLngs(heatmapData);
   }
 
   function toggleHeatmap(mapInstance, heatmapLayer, isVisible) {
-    if (!mapInstance || !heatmapLayer) {
-      console.warn('Cannot toggle heatmap: missing map or heatmap layer');
-      return;
-    }
+    if (!mapInstance || !heatmapLayer) return;
 
     if (isVisible) {
       if (!mapInstance.hasLayer(heatmapLayer)) {
         mapInstance.addLayer(heatmapLayer);
-        console.log('Heatmap layer added to map');
       }
     } else {
       if (mapInstance.hasLayer(heatmapLayer)) {
         mapInstance.removeLayer(heatmapLayer);
-        console.log('Heatmap layer removed from map');
       }
     }
   }
 
-  // --- Toast helpers ---
   function showToast(title, body) {
     if (!toastContainer) return;
     const el = document.createElement('div');
@@ -530,40 +471,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 3500);
   }
 
-  // --- Heatmap Guide helpers ---
   function showHeatmapGuide() {
     if (!heatmapGuide || !heatmapGuideOverlay) return;
-    
     heatmapGuideOverlay.style.display = 'block';
     heatmapGuide.style.display = 'block';
-    
-    // Add escape key listener
-    const escapeHandler = (e) => {
-      if (e.key === 'Escape') {
-        hideHeatmapGuide();
-        document.removeEventListener('keydown', escapeHandler);
-      }
-    };
-    document.addEventListener('keydown', escapeHandler);
-    
-    // Store the handler for cleanup
-    heatmapGuide._escapeHandler = escapeHandler;
   }
 
   function hideHeatmapGuide() {
     if (!heatmapGuide || !heatmapGuideOverlay) return;
-    
     heatmapGuideOverlay.style.display = 'none';
     heatmapGuide.style.display = 'none';
-    
-    // Remove escape key listener
-    if (heatmapGuide._escapeHandler) {
-      document.removeEventListener('keydown', heatmapGuide._escapeHandler);
-      heatmapGuide._escapeHandler = null;
-    }
   }
 
-  // form submission
+  // Form submission
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
@@ -587,7 +507,6 @@ document.addEventListener('DOMContentLoaded', () => {
       return alert("Please fill in all required fields including a photo.");
     }
 
-    // Optional: check weather at submit time as well
     checkWeather(lat, lng);
 
     try {
@@ -601,22 +520,226 @@ document.addEventListener('DOMContentLoaded', () => {
         const { error } = await res.json().catch(() => ({ error: "Unknown error" }));
         return alert(error || "Failed to save incident");
       }
-      console.log("✅ Incident saved successfully. Waiting for socket update...");
+      console.log("✅ Incident saved");
       form.reset();
       resetPhotoUI();
     } catch (error) {
       console.error(error);
-      alert("Network error while submitting incident");
+      alert("Network error");
     }
   });
 
-  function addIncidentToMap(incident) {
-    // Add to home map
+  // 📍 NEW: Create incident popup with updates
+  async function createIncidentPopup(incident) {
+    let updates = [];
+    try {
+      const response = await fetch(`/api/incidents/${incident.id}/updates`);
+      updates = await response.json();
+    } catch (err) {
+      console.error('Error fetching updates:', err);
+    }
+
+    const statusEmojis = {
+      'reported': '📝',
+      'verified': '✓',
+      'responding': '🚨',
+      'resolved': '✅',
+      'false_alarm': '❌'
+    };
+
+    const statusLabels = {
+      'reported': 'Reported',
+      'verified': 'Verified',
+      'responding': 'Responding',
+      'resolved': 'Resolved',
+      'false_alarm': 'False Alarm'
+    };
+
+    let popupContent = `
+    <div class="incident-popup">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span class="badge">${incident.type}</span>
+        <span class="status-badge status-${incident.status || 'reported'}">
+          ${statusEmojis[incident.status || 'reported']} ${statusLabels[incident.status || 'reported']}
+        </span>
+      </div>
+      <p style="font-size: 12px; margin: 6px 0;">${incident.description || 'No description'}</p>
+      <div class="meta">${new Date(incident.timestamp).toLocaleString()}</div>
+  `;
+
+    if (incident.image) {
+      popupContent += `
+      <img src="${incident.image}" alt="Incident photo" 
+           style="width: 100%; max-height: 150px; object-fit: cover; border-radius: 6px; margin-top: 8px; cursor: pointer;"
+           onclick="window.open('${incident.image}', '_blank')">
+    `;
+    }
+
+    if (updates.length > 0) {
+      popupContent += `
+      <div class="popup-updates">
+        <h4 style="font-size: 11px; color: var(--muted); margin: 8px 0 6px 0;">Updates (${updates.length})</h4>
+    `;
+
+      updates.slice(0, 3).forEach(update => {
+        popupContent += `
+        <div class="popup-update">
+          <div class="popup-update-status">
+            ${statusEmojis[update.status]} ${statusLabels[update.status]}
+          </div>
+          <div class="popup-update-text">${update.update_text}</div>
+          <div class="popup-update-time">${new Date(update.timestamp).toLocaleString()}</div>
+        </div>
+      `;
+      });
+
+      if (updates.length > 3) {
+        popupContent += `<div style="font-size: 10px; color: var(--muted); margin-top: 4px;">+ ${updates.length - 3} more updates</div>`;
+      }
+
+      popupContent += `</div>`;
+    }
+
+    popupContent += `
+    <button class="btn btn-primary" style="width: 100%; margin-top: 10px; font-size: 11px; padding: 6px;"
+            onclick="openIncidentDetail(${incident.id})">
+      View Details & Add Update
+    </button></div>
+  `;
+
+    return popupContent;
+  }
+
+  // 📍 NEW: Modal functions
+  window.openIncidentDetail = function (incidentId) {
+    const incident = allIncidents.find(i => i.id === incidentId);
+    if (!incident) return;
+
+    const modalHTML = `
+    <div id="incidentModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 20px;">
+      <div class="card" style="max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h2 style="margin: 0;">Incident Details</h2>
+          <button onclick="closeIncidentModal()" class="btn btn-secondary" style="padding: 6px 12px;">✕</button>
+        </div>
+        
+        <div class="incident-detail-content">
+          <div style="margin-bottom: 12px;">
+            <span class="badge">${incident.type}</span>
+            <span class="status-badge status-${incident.status || 'reported'}" style="margin-left: 8px;">
+              ${incident.status || 'reported'}
+            </span>
+          </div>
+          
+          <p>${incident.description || 'No description'}</p>
+          <div class="meta">${new Date(incident.timestamp).toLocaleString()}</div>
+          
+          ${incident.image ? `<img src="${incident.image}" style="width: 100%; border-radius: 10px; margin: 12px 0;">` : ''}
+          
+          <div class="updates-section" id="updatesTimeline">
+            <h4>Update Timeline</h4>
+            <div id="updatesList"></div>
+          </div>
+          
+          <div class="add-update-form">
+            <h4>Add an Update</h4>
+            <form id="addUpdateForm" onsubmit="submitUpdate(event, ${incidentId})">
+              <select id="updateStatus" required>
+                <option value="">Select status</option>
+                <option value="reported">📝 Reported</option>
+                <option value="verified">✓ Verified</option>
+                <option value="responding">🚨 Responding</option>
+                <option value="resolved">✅ Resolved</option>
+                <option value="false_alarm">❌ False Alarm</option>
+              </select>
+              <textarea id="updateText" rows="3" placeholder="What's the latest update?" required></textarea>
+              <button type="submit" class="btn btn-primary">Post Update</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    loadIncidentUpdates(incidentId);
+  };
+
+  window.closeIncidentModal = function () {
+    const modal = document.getElementById('incidentModal');
+    if (modal) modal.remove();
+  };
+
+  async function loadIncidentUpdates(incidentId) {
+    try {
+      const response = await fetch(`/api/incidents/${incidentId}/updates`);
+      const updates = await response.json();
+
+      const updatesList = document.getElementById('updatesList');
+
+      if (updates.length === 0) {
+        updatesList.innerHTML = '<p style="font-size: 12px; color: var(--muted);">No updates yet. Be the first to add one!</p>';
+        return;
+      }
+
+      updatesList.innerHTML = updates.map(update => `
+      <div class="update-item">
+        <div class="update-header">
+          <span class="status-badge status-${update.status}">${update.status}</span>
+          <span class="update-time">${new Date(update.timestamp).toLocaleString()}</span>
+        </div>
+        <div class="update-text">${update.update_text}</div>
+      </div>
+    `).join('');
+    } catch (err) {
+      console.error('Error loading updates:', err);
+    }
+  }
+
+  window.submitUpdate = async function (event, incidentId) {
+    event.preventDefault();
+
+    const status = document.getElementById('updateStatus').value;
+    const update_text = document.getElementById('updateText').value;
+
+    try {
+      const response = await fetch(`/api/incidents/${incidentId}/updates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, update_text })
+      });
+
+      if (response.ok) {
+        showToast('Update Posted', 'Update added successfully');
+        document.getElementById('addUpdateForm').reset();
+        loadIncidentUpdates(incidentId);
+
+        // Refresh incidents
+        const res = await fetch('/api/incidents');
+        const incidents = await res.json();
+        allIncidents = incidents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        // Refresh maps
+        if (homeCluster) homeCluster.clearLayers();
+        if (incidentsCluster) incidentsCluster.clearLayers();
+        await Promise.all(allIncidents.map(inc => addIncidentToMap(inc)));
+        updateHeatmap(map, homeHeatmap, allIncidents);
+        updateHeatmap(map2, incidentsHeatmap, allIncidents);
+      } else {
+        showToast('Error', 'Failed to post update');
+      }
+    } catch (err) {
+      console.error('Error posting update:', err);
+      showToast('Error', 'Failed to post update');
+    }
+  };
+
+  async function addIncidentToMap(incident) {
     if (map) {
       const marker = L.marker([incident.lat, incident.lng]);
-      const desc = incident.description ? incident.description : "No description";
-      const img = incident.image ? `<div style="margin-top:6px;"><img src="${incident.image}" alt="incident image" style="max-width:220px; max-height:160px; border-radius:8px;"/></div>` : "";
-      marker.bindPopup(`<b>${escapeHtml(incident.type)}</b><br>${escapeHtml(desc)}<br>${new Date(incident.timestamp).toLocaleString()}${img}`);
+      const popupContent = await createIncidentPopup(incident);
+      marker.bindPopup(popupContent, { maxWidth: 300 });
+
       if (homeCluster) {
         homeCluster.addLayer(marker);
       } else {
@@ -624,12 +747,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Add to incidents map
     if (map2) {
       const marker2 = L.marker([incident.lat, incident.lng]);
-      const desc = incident.description ? incident.description : "No description";
-      const img = incident.image ? `<div style="margin-top:6px;"><img src="${incident.image}" alt="incident image" style="max-width:220px; max-height:160px; border-radius:8px;"/></div>` : "";
-      marker2.bindPopup(`<b>${escapeHtml(incident.type)}</b><br>${escapeHtml(desc)}<br>${new Date(incident.timestamp).toLocaleString()}${img}`);
+      const popupContent = await createIncidentPopup(incident);
+      marker2.bindPopup(popupContent, { maxWidth: 300 });
+
       if (incidentsCluster) {
         incidentsCluster.addLayer(marker2);
       } else {
@@ -669,14 +791,12 @@ document.addEventListener('DOMContentLoaded', () => {
     locateBtn.className = "btn btn-secondary";
     locateBtn.textContent = "View";
     locateBtn.addEventListener("click", () => {
-      // Use the appropriate map based on current view
       const activeTab = document.querySelector('.nav-tab-btn.active').dataset.navTab;
       if (activeTab === 'home' && map) {
         map.setView([incident.lat, incident.lng], 16);
       } else if (activeTab === 'incidents' && map2) {
         map2.setView([incident.lat, incident.lng], 16);
       }
-      // Show weather for that incident location
       checkWeather(incident.lat, incident.lng);
     });
 
@@ -684,7 +804,6 @@ document.addEventListener('DOMContentLoaded', () => {
     item.appendChild(info);
     item.appendChild(locateBtn);
 
-    // Always add new incidents at the top
     if (incidentList.firstChild) {
       incidentList.insertBefore(item, incidentList.firstChild);
     } else {
@@ -696,18 +815,13 @@ document.addEventListener('DOMContentLoaded', () => {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   }
 
-  // Navigation tabs functionality
+  // Navigation tabs
   const navTabBtns = document.querySelectorAll('.nav-tab-btn');
   const viewPanels = document.querySelectorAll('.view-panel');
 
-  console.log('Navigation tabs found:', navTabBtns.length);
-  console.log('View panels found:', viewPanels.length);
-
-  // Navigation tab switching
   navTabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const targetNavTab = btn.dataset.navTab;
-      console.log('Navigation tab clicked:', targetNavTab);
 
       navTabBtns.forEach(b => b.classList.remove('active'));
       viewPanels.forEach(p => p.classList.remove('active'));
@@ -715,36 +829,28 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById(targetNavTab + 'Panel').classList.add('active');
 
       setTimeout(() => {
-        if (targetNavTab === 'home' && map) {
-          map.invalidateSize();
-        } else if (targetNavTab === 'incidents' && map2) {
-          map2.invalidateSize();
-        }
+        if (targetNavTab === 'home' && map) map.invalidateSize();
+        else if (targetNavTab === 'incidents' && map2) map2.invalidateSize();
       }, 150);
-      if (targetNavTab === 'analytics') {
-        console.log('Loading analytics...');
-        loadTypeAnalytics();
-      }
+
+      if (targetNavTab === 'analytics') loadTypeAnalytics();
     });
   });
 
-  // Analytics functionality
+  // Analytics tabs
   const tabBtns = document.querySelectorAll('.tab-btn');
   const tabContents = document.querySelectorAll('.tab-content');
 
-  // Analytics tab switching
   tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const targetTab = btn.dataset.tab;
 
-      // Update active states
       tabBtns.forEach(b => b.classList.remove('active'));
       tabContents.forEach(c => c.classList.remove('active'));
 
       btn.classList.add('active');
       document.getElementById(targetTab + 'Tab').classList.add('active');
 
-      // Load analytics data
       if (targetTab === 'types') {
         loadTypeAnalytics();
       } else if (targetTab === 'areas') {
@@ -753,20 +859,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Load type analytics
   async function loadTypeAnalytics() {
     try {
-      console.log('Loading type analytics...');
       const response = await fetch('/api/analytics/types');
       const data = await response.json();
-      console.log('Type analytics data:', data);
 
-      // Update stats
       document.getElementById('totalIncidents').textContent = data.total;
-      document.getElementById('mostReportedType').textContent =
-        data.mostReported ? data.mostReported.type : 'None';
+      document.getElementById('mostReportedType').textContent = data.mostReported ? data.mostReported.type : 'None';
 
-      // Create type chart
       const chartContainer = document.getElementById('typeChart');
       chartContainer.innerHTML = '';
 
@@ -787,20 +887,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Load area analytics
   async function loadAreaAnalytics() {
     try {
-      console.log('Loading area analytics...');
       const response = await fetch('/api/analytics/areas');
       const data = await response.json();
-      console.log('Area analytics data:', data);
 
-      // Update stats
       document.getElementById('recent24h').textContent = data.trends.recent24h;
       document.getElementById('recent7d').textContent = data.trends.recent7d;
       document.getElementById('hotspots').textContent = data.hotspots.length;
 
-      // Create hotspot list
       const hotspotContainer = document.getElementById('hotspotList');
       hotspotContainer.innerHTML = '';
 
@@ -816,23 +911,8 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="hotspot-view">View</div>
       `;
 
-        // Add click handler to center map on hotspot
         item.addEventListener('click', () => {
           map.setView([hotspot.center.lat, hotspot.center.lng], 14);
-
-          // Add a temporary marker to highlight the hotspot
-          const marker = L.marker([hotspot.center.lat, hotspot.center.lng], {
-            icon: L.divIcon({
-              className: 'hotspot-marker',
-              html: `<div style="background: #ef4444; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">${hotspot.count}</div>`,
-              iconSize: [20, 20]
-            })
-          }).addTo(map);
-
-          // Remove marker after 3 seconds
-          setTimeout(() => {
-            map.removeLayer(marker);
-          }, 3000);
         });
 
         hotspotContainer.appendChild(item);
@@ -842,25 +922,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-
-
   // Footer year
   document.getElementById("year").textContent = new Date().getFullYear();
 
-  // Photo input handlers with validation
+  // Photo handlers
   photoInput?.addEventListener('change', async () => {
     const file = photoInput.files && photoInput.files[0];
-    if (!file) { resetPhotoUI(); return; }
-    // Basic validations
+    if (!file) {
+      resetPhotoUI();
+      return;
+    }
     if (!file.type.startsWith('image/')) {
       alert('Please select an image file.');
       photoInput.value = '';
       resetPhotoUI();
       return;
     }
-    const maxRawSize = 8 * 1024 * 1024; // 8MB limit before compression
+    const maxRawSize = 8 * 1024 * 1024;
     if (file.size > maxRawSize) {
-      alert('Image is too large (max 8MB). Please choose a smaller one.');
+      alert('Image too large (max 8MB)');
       photoInput.value = '';
       resetPhotoUI();
       return;
@@ -875,10 +955,9 @@ document.addEventListener('DOMContentLoaded', () => {
         photoMeta.style.display = 'block';
       }
       if (uploadActions) uploadActions.style.display = 'flex';
-      if (clearPhotoBtn) clearPhotoBtn.style.display = 'inline-flex';
     } catch (e) {
       console.error('Preview failed', e);
-      alert('Could not preview this image. Try a different file.');
+      alert('Could not preview image');
       photoInput.value = '';
       resetPhotoUI();
     }
@@ -889,10 +968,7 @@ document.addEventListener('DOMContentLoaded', () => {
     resetPhotoUI();
   });
 
-  // Heatmap guide close button
   closeGuideBtn?.addEventListener('click', hideHeatmapGuide);
-  
-  // Close guide when clicking overlay
   heatmapGuideOverlay?.addEventListener('click', hideHeatmapGuide);
 
   function resetPhotoUI() {
@@ -917,7 +993,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Drag & drop and paste support
+  // Drag & drop
   if (uploadArea) {
     ['dragenter', 'dragover'].forEach(evt => uploadArea.addEventListener(evt, (e) => {
       e.preventDefault();
@@ -931,67 +1007,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }));
     uploadArea.addEventListener('drop', async (e) => {
       const file = e.dataTransfer.files && e.dataTransfer.files[0];
-      if (!file) return;
-      if (!file.type.startsWith('image/')) { alert('Please drop an image.'); return; }
-      const maxRawSize = 8 * 1024 * 1024;
-      if (file.size > maxRawSize) { alert('Image is too large (max 8MB).'); return; }
-      try {
-        const previewBlob = await compressImage(file, 1600, 0.82).catch(() => file);
-        const url = URL.createObjectURL(previewBlob);
-        photoPreview.src = url;
-        photoPreview.style.display = 'block';
-        if (photoMeta) {
-          photoMeta.textContent = `${file.name || 'image'} • ${(file.size / 1024).toFixed(0)} KB`;
-          photoMeta.style.display = 'block';
-        }
-        if (uploadActions) uploadActions.style.display = 'flex';
-        if (clearPhotoBtn) clearPhotoBtn.style.display = 'inline-flex';
-        // Reflect into file input for form submission
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        photoInput.files = dt.files;
-      } catch (err) {
-        console.error('Drop preview failed', err);
-        alert('Could not preview this image.');
-      }
-    });
+      if (!file || !file.type.startsWith('image/')) return;
 
-    // Paste support
-    uploadArea.addEventListener('paste', async (e) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      for (let i = 0; i < items.length; i++) {
-        const it = items[i];
-        if (it.type.startsWith('image/')) {
-          const file = it.getAsFile();
-          if (!file) continue;
-          const maxRawSize = 8 * 1024 * 1024;
-          if (file.size > maxRawSize) { alert('Image is too large (max 8MB).'); return; }
-          try {
-            const previewBlob = await compressImage(file, 1600, 0.82).catch(() => file);
-            const url = URL.createObjectURL(previewBlob);
-            photoPreview.src = url;
-            photoPreview.style.display = 'block';
-            if (photoMeta) {
-              photoMeta.textContent = `${file.name || 'image'} • ${(file.size / 1024).toFixed(0)} KB`;
-              photoMeta.style.display = 'block';
-            }
-            if (uploadActions) uploadActions.style.display = 'flex';
-            if (clearPhotoBtn) clearPhotoBtn.style.display = 'inline-flex';
-            const dt = new DataTransfer();
-            dt.items.add(file);
-            photoInput.files = dt.files;
-          } catch (err) {
-            console.error('Paste preview failed', err);
-            alert('Could not preview this image.');
-          }
-          break;
-        }
-      }
+      const previewBlob = await compressImage(file, 1600, 0.82).catch(() => file);
+      const url = URL.createObjectURL(previewBlob);
+      photoPreview.src = url;
+      photoPreview.style.display = 'block';
+
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      photoInput.files = dt.files;
     });
   }
 
-  // Client-side image compression
+  // Image compression
   function compressImage(file, maxSize, quality) {
     return new Promise((resolve, reject) => {
       if (!file.type.startsWith('image/')) return resolve(file);
@@ -1020,21 +1049,11 @@ document.addEventListener('DOMContentLoaded', () => {
     return { width: Math.round(w * ratio), height: Math.round(h * ratio) };
   }
 
-  // Cluster icon with count-based tiers
-  function createClusterIcon(cluster) {
-    const count = cluster.getChildCount();
-    let c = ' marker-cluster-small';
-    if (count >= 50) c = ' marker-cluster-large';
-    else if (count >= 10) c = ' marker-cluster-medium';
-    const html = `<div><span>${count}</span></div>`;
-    return new L.DivIcon({ html, className: 'marker-cluster' + c, iconSize: new L.Point(40, 40) });
-  }
-
-  // Weather: fetch and evaluate safety
+  // Weather check
   async function checkWeather(lat, lng) {
-    if (!OWM_API_KEY && !WEATHERAPI_KEY) return; // no key set, skip UI
+    if (!OWM_API_KEY && !WEATHERAPI_KEY) return;
     try {
-      let summary = 'Weather data available';
+      let summary = 'Weather data';
       let temp = 0;
       let wind = 0;
       let conditions = { id: 0, rain1h: 0, snow1h: 0, visibility: 10000 };
@@ -1042,15 +1061,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (WEATHERAPI_KEY) {
         const url = `https://api.weatherapi.com/v1/current.json?key=${WEATHERAPI_KEY}&q=${lat},${lng}&aqi=no`;
         const res = await fetch(url);
-        if (!res.ok) throw new Error('WeatherAPI fetch failed');
+        if (!res.ok) throw new Error('WeatherAPI failed');
         const data = await res.json();
         summary = data.current?.condition?.text || summary;
         temp = Math.round(data.current?.temp_c ?? 0);
         wind = Math.round((data.current?.wind_kph ?? 0) / 3.6);
-        // WeatherAPI does not give 1h rain directly in current endpoint
-        const code = data.current?.condition?.code || 0;
         conditions = {
-          id: mapWeatherApiCodeToOwmLike(code),
+          id: mapWeatherApiCodeToOwmLike(data.current?.condition?.code || 0),
           rain1h: 0,
           snow1h: 0,
           visibility: Math.round((data.current?.vis_km ?? 10) * 1000)
@@ -1058,7 +1075,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (OWM_API_KEY) {
         const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${OWM_API_KEY}&units=metric`;
         const res = await fetch(url);
-        if (!res.ok) throw new Error('OpenWeather fetch failed');
+        if (!res.ok) throw new Error('OpenWeather failed');
         const data = await res.json();
         summary = data.weather?.[0]?.description || summary;
         temp = Math.round(data.main?.temp ?? 0);
@@ -1079,31 +1096,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function evaluateWeatherSafety({ id, temp, wind, rain1h, snow1h, visibility }) {
-    // Danger if thunderstorms, heavy rain/snow, extreme temps, very high wind, low vis
     const thunder = id >= 200 && id < 300;
     const heavyRain = (id >= 500 && id < 600) && (rain1h >= 7);
     const heavySnow = (id >= 600 && id < 700) && (snow1h >= 3);
     const extremeHeat = temp >= 40;
     const extremeCold = temp <= -10;
-    const highWind = wind >= 15; // ~54 km/h
     const lowVis = visibility <= 1000;
 
     if (thunder || heavyRain || heavySnow || extremeHeat || extremeCold || lowVis) return 'danger';
     if (wind >= 10 || rain1h >= 3 || snow1h >= 1) return 'warning';
     return 'safe';
-  }
-
-  // Feeds scaffold (placeholders for future integrations)
-  async function fetchTrafficContext(lat, lng) {
-    return null;
-  }
-
-  async function fetchGovernmentFeeds(lat, lng) {
-    return null;
-  }
-
-  async function fetchCrowdsourcedSignals(lat, lng) {
-    return null;
   }
 
   function updateWeatherUI(level, summary, detail) {
@@ -1113,24 +1115,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (level === 'danger') weatherStatus.classList.add('weather-danger');
     else if (level === 'warning') weatherStatus.classList.add('weather-warning');
     else weatherStatus.classList.add('weather-safe');
-    if (weatherSummary) weatherSummary.textContent = level === 'danger' ? 'Unsafe weather – consider avoiding travel' : level === 'warning' ? 'Caution – conditions may be risky' : 'Safe to travel';
+    if (weatherSummary) weatherSummary.textContent = level === 'danger' ? 'Unsafe weather' : level === 'warning' ? 'Caution' : 'Safe to travel';
     if (weatherDetail) weatherDetail.textContent = `${summary} • ${detail}`;
   }
 
-  // Map WeatherAPI condition code roughly to OWM-like id buckets for our rules
   function mapWeatherApiCodeToOwmLike(code) {
-    // Thunder: 1000 clear, 1003-1009 cloud; 1087 thunder
-    if (code === 1087) return 200; // thunderstorm
-    // Drizzle/rain
-    if ([1063, 1180, 1183, 1186, 1189, 1192, 1195, 1240, 1243, 1246].includes(code)) return 500; // rain
-    // Snow
-    if ([1066, 1069, 1114, 1117, 1210, 1213, 1216, 1219, 1222, 1225, 1255, 1258].includes(code)) return 600; // snow
-    // Sleet/ice pellets
-    if ([1204, 1207, 1237, 1261, 1264].includes(code)) return 611; // sleet
-    // Fog/mist
-    if ([1030, 1135, 1147].includes(code)) return 741; // fog
-    // Extreme
-    if ([1273, 1276, 1279, 1282].includes(code)) return 202; // heavy thunder
-    return 800; // clear/other
+    if (code === 1087) return 200;
+    if ([1063, 1180, 1183, 1186, 1189, 1192, 1195, 1240, 1243, 1246].includes(code)) return 500;
+    if ([1066, 1069, 1114, 1117, 1210, 1213, 1216, 1219, 1222, 1225, 1255, 1258].includes(code)) return 600;
+    if ([1204, 1207, 1237, 1261, 1264].includes(code)) return 611;
+    if ([1030, 1135, 1147].includes(code)) return 741;
+    if ([1273, 1276, 1279, 1282].includes(code)) return 202;
+    return 800;
   }
 });
