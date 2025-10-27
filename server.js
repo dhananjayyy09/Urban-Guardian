@@ -10,7 +10,7 @@ dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
@@ -34,23 +34,23 @@ io.on('connection', (socket) => {
 });
 
 // --- MySQL Connection Pool ---
+const db = mysql.createPool({
+  connectionLimit: 10,
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME,
+  port: process.env.DB_PORT,
+  waitForConnections: true,
+});
+
 (async () => {
   try {
-    const db = mysql.createPool({
-      connectionLimit: 10,
-      host: process.env.DB_HOST,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASS,
-      database: process.env.DB_NAME,
-      port: process.env.DB_PORT,
-      waitForConnections: true,
-    });
-
     const conn = await db.getConnection();
     console.log("✅ Connected to MySQL Database Pool:", process.env.DB_NAME);
     conn.release();
 
-    // Start the server only after DB connects
+    // Start server only after DB connects
     server.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
     });
@@ -60,6 +60,7 @@ io.on('connection', (socket) => {
     process.exit(1);
   }
 })();
+
 
 // --- Routes ---
 
@@ -264,5 +265,3 @@ app.get('/api/analytics/areas', async (req, res) => {
   }
 });
 
-// Start server
-server.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
