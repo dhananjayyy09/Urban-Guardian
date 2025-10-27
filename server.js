@@ -5,6 +5,8 @@ const mysql = require('mysql2/promise');
 const path = require('path');
 const http = require('http');
 const { Server } = require("socket.io");
+const dotenv = require ("dotenv");
+dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
@@ -32,24 +34,32 @@ io.on('connection', (socket) => {
 });
 
 // --- MySQL Connection Pool ---
-const db = mysql.createPool({
-  connectionLimit: 10,
-  host: 'localhost',
-  user: 'root',
-  password: 'DJdjdj12',
-  database: 'urban_guardian'
-});
+(async () => {
+  try {
+    const db = mysql.createPool({
+      connectionLimit: 10,
+      host: process.env.DB_HOST,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASS,
+      database: process.env.DB_NAME,
+      port: process.env.DB_PORT,
+      waitForConnections: true,
+    });
 
-// Check Pool Connection
-db.getConnection()
-  .then(connection => {
-    console.log('✅ Connected to MySQL Database Pool: urban_guardian');
-    connection.release();
-  })
-  .catch(err => {
-    console.error('❌ MySQL Pool Connection Failed:', err);
+    const conn = await db.getConnection();
+    console.log("✅ Connected to MySQL Database Pool:", process.env.DB_NAME);
+    conn.release();
+
+    // Start the server only after DB connects
+    server.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+    });
+
+  } catch (err) {
+    console.error("❌ MySQL Pool Connection Failed:", err.message);
     process.exit(1);
-  });
+  }
+})();
 
 // --- Routes ---
 

@@ -1,0 +1,43 @@
+# ----------------------
+# Node.js / Express Setup
+# ----------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ----------------------
+# Environment Variables (Secrets!)
+# ----------------------
+.env
+.env.local
+.env.production
+.env.development
+
+# ----------------------
+# Build / Output Files
+# ----------------------
+dist/
+build/
+coverage/
+logs/
+*.log
+
+# ----------------------
+# Temporary Files
+# ----------------------
+.DS_Store
+Thumbs.db
+.cache/
+.tmp/
+.vscode/
+.idea/
+*.swp
+
+# ----------------------
+# OS / Misc
+# ----------------------
+*.bak
+*.old
+*.tmp
